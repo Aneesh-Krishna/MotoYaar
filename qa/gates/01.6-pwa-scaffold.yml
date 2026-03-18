@@ -1,0 +1,89 @@
+story: 1.6
+slug: pwa-scaffold
+epic: "01 — Foundation & Infrastructure"
+reviewed_by: Quinn (qa agent, claude-sonnet-4-6)
+reviewed_date: 2026-03-15
+decision: PASS
+concerns_resolved_date: 2026-03-15
+
+# ─── AC Traceability ──────────────────────────────────────────────────────────
+acceptance_criteria:
+  - id: AC1
+    description: "public/manifest.json fully configured"
+    result: PASS
+    evidence: "All required fields present: name, short_name, theme_color, background_color, display:standalone, orientation:portrait, start_url, scope, 3 icons (192, 512, 512-maskable)"
+  - id: AC2
+    description: Service worker registered and active
+    result: PASS
+    evidence: "next-pwa v5.6.0 configured in next.config.mjs; sw.js generated in public/; Lighthouse INSTALLABLE = green"
+  - id: AC3
+    description: VAPID keys in .env.local
+    result: PASS
+    evidence: "All 4 vars present: VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_EMAIL, NEXT_PUBLIC_VAPID_PUBLIC_KEY; .env.example also updated"
+  - id: AC4
+    description: "src/lib/push.ts implemented"
+    result: PASS
+    evidence: "subscribeToPush() with urlBase64ToUint8Array helper; sendPushNotification() with dynamic web-push import; PushPayload and StoredPushSubscription interfaces exported"
+  - id: AC5
+    description: App installable on Android Chrome
+    result: PASS
+    evidence: "Lighthouse v9 CLI report: INSTALLABLE = green — Web app manifest and service worker meet installability requirements"
+  - id: AC6
+    description: pnpm typecheck passes
+    result: PASS
+    evidence: "tsc --noEmit exits 0; TS2322 on Uint8Array<ArrayBufferLike> was fixed by explicit ArrayBuffer construction"
+
+# ─── Concerns ────────────────────────────────────────────────────────────────
+concerns:
+  - id: C1
+    severity: medium
+    title: Generated SW files not in .gitignore
+    detail: |
+      pnpm build generates public/sw.js and public/workbox-{hash}.js.
+      .gitignore does not exclude these. Build artifacts should not be committed —
+      the workbox hash changes on every build creating noisy diffs.
+    recommendation: "Add to .gitignore: public/sw.js and public/workbox-*.js"
+    blocking: true
+
+  - id: C2
+    severity: low
+    title: Task 4.1 overstates cache strategy implementation
+    detail: |
+      Task 4.1 checkbox marked [x] with description "Configure next-pwa with cache strategies
+      from Dev Notes". The 4 runtimeCaching strategies (network-first for API, cache-first for
+      images, network-only for documents) were NOT implemented — only basic dest/register/skipWaiting.
+      AC2 is still met (app shell caching works by default), but the task description misleads
+      future maintainers about what was actually configured.
+    recommendation: "Either add runtimeCaching config or update task 4.1 notes to clarify default behaviour was accepted"
+    blocking: false
+
+  - id: C3
+    severity: low
+    title: AC checkboxes not marked in story file
+    detail: "All 6 AC items remain unchecked (- [ ]) despite all being verified complete."
+    recommendation: "Mark AC checkboxes [x] before closing story"
+    blocking: true
+
+# ─── Info / Non-blocking ─────────────────────────────────────────────────────
+info:
+  - id: I1
+    title: setVapidDetails called per invocation
+    detail: |
+      sendPushNotification calls setVapidDetails on every call, mutating global web-push state.
+      Harmless at MVP scale. When the notification API route is built (future story), consider
+      calling setVapidDetails once at module initialisation in the server-side route handler.
+
+  - id: I2
+    title: apple-touch-icon absent
+    detail: "Lighthouse flagged missing apple-touch-icon. Deferred to Story 8.2 per Dev Notes — acceptable."
+
+# ─── Summary ─────────────────────────────────────────────────────────────────
+summary: |
+  Story 1.6 meets all 6 acceptance criteria. PWA is installable, service worker is active,
+  VAPID infrastructure is in place, push.ts scaffold is correctly structured with client/server
+  separation, and typecheck passes.
+  All blocking concerns resolved 2026-03-15:
+  - C1: public/sw.js and public/workbox-*.js added to .gitignore
+  - C2: runtimeCaching deferral documented in completion notes
+  - C3: All 6 AC checkboxes marked [x]
+  Story is clear to merge.

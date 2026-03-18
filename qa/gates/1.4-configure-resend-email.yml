@@ -1,0 +1,28 @@
+story: "1.4 — Configure Resend (Email)"
+epic: "01 — Foundation & Infrastructure"
+reviewed_by: Quinn (QA Agent)
+review_date: "2026-03-15"
+gate_decision: PASS
+
+summary: >
+  Implementation complete for development. sendEmail() works, typecheck passes,
+  test email confirmed received. AC2 (sending domain verified) formally waived
+  for development context — dev email works correctly via onboarding@resend.dev
+  per dev notes guidance. Production domain verification tracked in Todo.md.
+
+acceptance_criteria:
+  AC1_api_key_configured: PASS
+  AC2_sending_domain_verified: WAIVED # dev works via onboarding@resend.dev; production deferred to domain registration
+  AC3_sendEmail_implemented: PASS
+  AC4_test_email_received: PASS
+
+waivers:
+  - id: W1
+    ac: AC2
+    rationale: "Dev email functional via onboarding@resend.dev. Production domain verification is a pre-deploy infra task, not a dev story blocker."
+    tracked_in: "Todo.md — Production Checklist"
+
+production_blockers:
+  - description: "Register motoyaar.app and verify in Resend (DNS TXT/DKIM/DMARC) before first production deploy"
+    affects_stories: ["8.3", "7.5", "10.1", "11.2", "11.5"]
+  - description: "Add RESEND_API_KEY to Vercel environment variables"

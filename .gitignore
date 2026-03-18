@@ -1,0 +1,10 @@
+.env*
+!.env.example
+node_modules/
+.next/
+out/
+.DS_Store
+
+# next-pwa generated service worker build artifacts
+public/sw.js
+public/workbox-*.js

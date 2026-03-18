@@ -1,0 +1,38 @@
+MotoYaar - a web-application that is a friend of all motor enthusiasts.
+
+What it is: A web-application that allows vehicle owners to add & manage vehicles, track the important dates related to their vehicles, add & manage expenses, trips. A reddit-like community where users can post anything related to vehicles, with images & links, other users can comment, like, dislike, report. 
+
+Features:
+1. A user creates his profile, adds profile image, adds a bio, adds drivers license. Logging in & signing up is allowed only through google SSO.
+2. A user adds vehicle(s)
+  2.1 A vehicle can have multiple fields like registration number, RC (A link to another collection), insurance certificate (A link to another collection), PUC (A link to another collection) & other such important docs related to the vehicle.
+  2.2 The user adds important docs related to a vehicle of his. A vehicle can have multiple important documents such as RC, insurance, PUC (pollution under control) certificate and such. All the documents uploaded (not mandatory) for a vehicle should be parsed, notifications related to these documents should be sent to the user via email.
+3. A user adds expenses for each vehicle
+  3.1 An expense entry can have multiple fields such as price, comments (Overpriced, average price, underpriced), reason (Service, fuel, trip, etc), date.
+  3.2 If the selected reason is trip, then redirect to the trips adding, because once the trip is created with its expenses, that expense will be added in the expenses entry.
+4. A user adds a trip (Can be independent of a vehicle).
+  4.1 A trip entry can have route, time taken, expense, description and other related fields with an optional link to the vehicle used.
+  4.2 If the user links one of his vehicles to the trip, then the expense of the trip should be logged in the expenses entry with a link to the trip entry.
+  4.3 A trip's expenses can have a breakdown field (Food expense, fuel expense, stay expense, etc). If fuel expense is added in a trip expese breakdown, then this entry should be added to the expenses entry with reason being fuel expense.
+5. A user wants to see the spends report
+  5.1 The user can click 'See spends' for a vehicle: A detailed report of spends on that vehicle should be shown.
+  5.2 The user can click 'See overall spends' on his profile: A detailed report of all of his spends should be shown based on the type (Monthly, select date range, yearly)
+  5.3 The report seen is a report calculated through code with precision and detailing, not an AI generated report.
+  5.4 Each user gets 1 free AI generated report each month. This is an overall spends report. This should show each and every detail of the spends based on the type (monthly, selceted date range, yearly) with AI generated report based on these data.
+6. A user can invite other users using their email to edit/manage his vehicles.
+7. A user gets notifications if any of his documents uploaded are nearing expiry, and gets a single notification with urgent action if a document expires.
+8. A user can navigate to the community section
+  8.1 A user can post just like in reddit with images, tags, links, description
+  8.2 A user can like, dislike, add comments, and report a post (These reports can be seen in the admin dashboard with admin login).
+  8.3 A user can search for posts, sort them through time, trending, etc
+     8.3.1 Searching for posts can be done by poster name search, post tag search, post title search  
+9. A user can start a live trip (A live gps tracking system that tracks the route, total time taken, average speed, top speed). This will give a report upon the end of the trip (When the user clicks and confirms to stop).
+  9.1 This live trip should be logged. It can be linked to a trip entry while being created.
+  
+  
+TO-DO
+Stories 
+1.3 (One task remaining)
+
+Task 2.2 checkbox is marked complete but domain isn't registered — this should be unchecked or formally waived
+Production blocker — all emails from Stories 8.3, 7.5, 10.1, 11.2, 11.5 will fail until motoyaar.app is registered and verified in Resend. Must be resolved before first production deployment with email functionality.

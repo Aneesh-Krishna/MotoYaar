@@ -1,0 +1,93 @@
+gate:
+  story: "1.2"
+  slug: configure-supabase
+  epic: "01"
+  date: "2026-03-15"
+  reviewer: Quinn (QA Agent)
+  decision: PASS
+  previous_decision: CONCERNS (Review 1, 2026-03-15)
+
+summary: >
+  All 6 acceptance criteria pass. All 3 actionable concerns from Review 1 (C1 partial
+  indexes, C2 GIN index, C3 singleton guard) resolved and verified via migration
+  0001_free_unicorn.sql and updated client.ts. Schema fully matches architecture DDL.
+  Migration applied to live Supabase. App boots clean, typecheck and lint pass.
+  C4 (no per-user RLS policies) remains acknowledged as intentional MVP decision.
+
+acceptance_criteria:
+  - id: AC1
+    description: "Supabase project created (free tier)"
+    result: PASS
+    evidence: "DATABASE_URL configured in .env.local; migrations applied to live Supabase instance"
+
+  - id: AC2
+    description: "PostgreSQL schema applied: all 16 tables from architecture section 9"
+    result: PASS
+    evidence: "0000_true_chronomancer.sql + 0001_free_unicorn.sql applied; all 16 tables present with correct schema"
+
+  - id: AC3
+    description: "Row Level Security (RLS) enabled on all user-owned tables"
+    result: PASS
+    evidence: "ALTER TABLE ... ENABLE ROW LEVEL SECURITY confirmed for all 14 user-owned tables"
+
+  - id: AC4
+    description: "Supabase environment variables configured in .env.local"
+    result: PASS
+    evidence: "DATABASE_URL present and functional; both migrations and dev server connect successfully"
+
+  - id: AC5
+    description: "Drizzle ORM installed and client.ts + schema.ts implemented"
+    result: PASS
+    evidence: "drizzle-orm@0.45.1, postgres@3.4.8, @supabase/supabase-js@2.99.1 installed; client.ts has prepare:false + singleton guard; schema.ts has all 16 tables with correct types"
+
+  - id: AC6
+    description: "Database client tested: pnpm dev boots, no DB connection errors"
+    result: PASS
+    evidence: "pnpm dev — Ready in 9.2s, no DB errors; pnpm typecheck exits 0; pnpm lint — no warnings or errors"
+
+resolved_concerns:
+  - id: C1
+    title: "4 partial indexes missing WHERE conditions"
+    resolution: >
+      Fixed in schema.ts using .where(sql`...`) and .desc() on index definitions.
+      Migration 0001_free_unicorn.sql regenerated and applied. Verified SQL output:
+      idx_posts_score (DESC NULLS LAST, WHERE is_hidden=false),
+      idx_posts_created_at (DESC NULLS LAST, WHERE is_hidden=false),
+      idx_documents_expiry_date (WHERE expiry_date IS NOT NULL),
+      idx_notifications_unread (WHERE is_read=false).
+
+  - id: C2
+    title: "idx_posts_tags used BTREE instead of GIN"
+    resolution: >
+      Fixed in schema.ts using .using('gin', table.tags).
+      Migration 0001_free_unicorn.sql: idx_posts_tags now USING gin ("tags").
+
+  - id: C3
+    title: "No singleton guard in client.ts for Next.js hot reload"
+    resolution: >
+      Added globalThis.db singleton pattern with NODE_ENV !== 'production' guard.
+      Prevents connection pool exhaustion during dev hot reloads.
+
+open_items:
+  - id: C4
+    severity: info
+    title: "RLS enabled with no per-user policies"
+    status: ACKNOWLEDGED
+    detail: "Intentional for MVP. All queries use service role. Post-MVP backlog item."
+
+  - id: task-8.2
+    title: "pnpm db:studio visual table verification"
+    status: WAIVED
+    detail: "Browser-based check deferred to developer."
+
+risks: []
+
+waived:
+  - id: "Task 8.2"
+    reason: "pnpm db:studio visual verification is a browser-based check; deferred to developer"
+  - id: "C4"
+    reason: "No per-user RLS policies is intentional for MVP; tracked as post-MVP hardening item"
+
+recommendations:
+  - "Define per-user RLS policies before introducing any direct client-side Supabase access (post-MVP)"
+  - "Consider Supabase Pro upgrade before beta to avoid 1-week inactivity pause on free tier"

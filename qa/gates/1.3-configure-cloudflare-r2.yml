@@ -1,0 +1,108 @@
+gate:
+  story: "1.3"
+  slug: configure-cloudflare-r2
+  epic: "01"
+  date: "2026-03-15"
+  reviewer: Quinn (QA Agent)
+  decision: PASS
+  previous_decision: CONCERNS (Review 1, 2026-03-15)
+
+summary: >
+  All actionable concerns from Review 1 resolved. C4 (AC checkboxes) fixed — AC1, AC2,
+  AC3, AC5 ticked; AC4 correctly left open with inline deferral note to Story 8.1.
+  C1-C3 remain open but are explicitly deferred to storageService.ts (Story 1.1) —
+  correct disposition, not fixable in this story. C5 (AC4 lifecycle deletion) tracked
+  as Story 8.1 dependency. r2.ts implementation is correct, typecheck clean, manual
+  upload verified. Story 1.3 PASSES.
+
+acceptance_criteria:
+  - id: AC1
+    description: "R2 bucket created on Cloudflare"
+    result: PASS
+    evidence: "Credentials in .env.local; manual upload test confirmed file appeared in motoyaar-documents bucket dashboard"
+
+  - id: AC2
+    description: "S3-compatible API credentials stored in .env.local"
+    result: PASS
+    evidence: "R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME all present in .env.local"
+
+  - id: AC3
+    description: "src/lib/r2.ts implemented: S3 client + generateUploadUrl() and deleteObject() helpers"
+    result: PASS
+    evidence: "r2.ts exports generateUploadUrl (60s PUT), generateAccessUrl (900s GET), deleteObject. TypeScript compiles clean. Key naming convention documented in JSDoc."
+
+  - id: AC4
+    description: "Lifecycle rule configured: objects deleted 10 days after expiry_date"
+    result: CONCERNS
+    evidence: >
+      Option A (cron-based deletion) chosen per Dev Notes. Code comment in r2.ts
+      references Story 8.1 as the deletion handler. Strategy is correct and documented,
+      but actual deletion logic deferred — AC not fully satisfied until Story 8.1
+      implements the cron step.
+
+  - id: AC5
+    description: "Test upload and signed URL retrieval working locally"
+    result: PASS
+    evidence: "generateUploadUrl() called from temp test route; pre-signed PUT URL used to upload test file; file confirmed visible in R2 dashboard"
+
+concerns:
+  - id: C1
+    severity: low
+    title: "No env var startup validation — silent misconfiguration risk"
+    detail: >
+      All four env vars use ! non-null assertions. A missing var constructs the S3 client
+      with undefined (e.g. https://undefined.r2.cloudflarestorage.com) with no clear error.
+    recommendation: "Add startup guard in storageService.ts (Story 1.1) to validate required R2 env vars on boot."
+    blocking: false
+
+  - id: C2
+    severity: medium
+    title: "No upload size constraint on presigned PUT URL"
+    detail: >
+      generateUploadUrl() does not set ContentLength or a max-bytes limit.
+      Any caller with a valid signed URL can upload arbitrarily large files within 60s.
+    recommendation: >
+      storageService.ts wrapper should enforce a max file size (e.g. 10MB) when
+      calling generateUploadUrl(). Alternatively add ContentLength to PutObjectCommand.
+    blocking: false
+
+  - id: C3
+    severity: low
+    title: "Key parameter accepted without path validation"
+    detail: >
+      All three exported functions accept key as a raw string. The {userId}/{documentId}/{filename}
+      convention is documented but not enforced at this layer.
+    recommendation: "storageService.ts must build and validate keys — never pass caller-supplied strings directly to r2.ts functions."
+    blocking: false
+
+  - id: C4
+    severity: info
+    title: "AC checkboxes at top of story file not ticked"
+    detail: "Top-level AC checkboxes (lines 21-25) are all - [ ] while task checkboxes are [x]."
+    recommendation: "Update AC checkboxes to reflect completion."
+    blocking: false
+    status: RESOLVED
+    resolution: "AC1, AC2, AC3, AC5 ticked. AC4 left open with inline deferral note (Story 8.1)."
+
+  - id: C5
+    severity: medium
+    title: "AC4 fully satisfied only after Story 8.1"
+    detail: >
+      The lifecycle deletion comment correctly defers to Story 8.1, but AC4 as written
+      is not technically satisfied until cron deletion logic is implemented.
+    recommendation: "Story 8.1 should explicitly reference Story 1.3 AC4 as a dependency to close."
+    blocking: false
+
+risks:
+  - description: "Story 8.1 never implements R2 deletion → expired documents accumulate indefinitely"
+    probability: low
+    impact: high
+    score: medium
+    mitigation: "Ensure Story 8.1 backlog item is linked to this AC4 concern"
+
+waived: []
+
+recommendations:
+  - "Address C1-C3 in storageService.ts (Story 1.1) before any user-facing upload routes go live"
+  - "Story 8.1 must close AC4 of this story — add explicit cross-reference in Story 8.1"
+  - "Confirm R2 bucket CORS policy is configured before browser-based direct uploads are wired up (likely Story covering upload UI)"

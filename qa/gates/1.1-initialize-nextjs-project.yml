@@ -1,0 +1,54 @@
+gate:
+  story: "1.1"
+  slug: initialize-nextjs-project
+  epic: "01"
+  date: "2026-03-15"
+  reviewer: Quinn (QA Agent)
+  decision: PASS
+
+summary: >
+  All acceptance criteria verified against live environment. Typecheck passes,
+  lint passes, dev server starts clean. Full directory structure matches
+  architecture spec. Core infrastructure files implemented correctly.
+
+acceptance_criteria:
+  - id: AC1
+    description: "Next.js project runs with App Router, TypeScript, ESLint, and Tailwind CSS configured"
+    result: PASS
+    evidence: "pnpm dev starts Next.js 14.2.35 with App Router; tsconfig.json has strict TS; eslint@8 + eslint-config-next@14.2.0 configured; tailwind.config.ts exists"
+
+  - id: AC2
+    description: ".gitignore excludes .env* (except .env.example), node_modules/, .next/"
+    result: PASS
+    evidence: ".gitignore contains .env*, !.env.example, node_modules/, .next/"
+
+  - id: AC3
+    description: "Project structure follows architecture's unified project structure"
+    result: PASS
+    evidence: "All 27 spot-checked files/dirs confirmed present; all service/hook/store/util stubs created; drizzle/migrations/ and e2e/ dirs exist"
+
+  - id: AC4
+    description: "pnpm dev starts the local dev server without errors"
+    result: PASS
+    evidence: "Next.js 14.2.35 — ✓ Ready in 2.9s"
+
+  - id: AC5
+    description: "pnpm typecheck passes"
+    result: PASS
+    evidence: "tsc --noEmit exits 0, no errors"
+
+  - id: AC6
+    description: "pnpm lint passes"
+    result: PASS
+    evidence: "next lint — ✔ No ESLint warnings or errors"
+
+notable_fixes_by_dev:
+  - "next.config.ts → next.config.mjs (Next.js 14.2 does not support .ts config)"
+  - "ESLint not pre-installed; added eslint@8 + eslint-config-next@14.2.0 + .eslintrc.json"
+  - "pino + pino-pretty installed as required by story"
+
+risks: []
+
+waived: []
+
+recommendations: []

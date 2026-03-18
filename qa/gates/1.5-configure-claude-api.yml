@@ -1,0 +1,49 @@
+story: "1.5 — Configure Claude API (AI)"
+epic: "01 — Foundation & Infrastructure"
+reviewed_by: Quinn (QA Agent)
+review_date: "2026-03-15"
+gate_decision: PASS
+
+summary: >
+  All 6 acceptance criteria satisfied. `src/lib/anthropic.ts` correctly implements
+  `parseDocument` (never throws, returns null on failure) and `generateReport`
+  (throws on failure). API key correctly server-side only with no NEXT_PUBLIC_ prefix.
+  pnpm typecheck passes clean. Four minor non-blocking concerns noted — all are
+  documented architectural decisions or deferred to consuming stories (4.1, 7.3).
+
+acceptance_criteria:
+  AC1_api_key_in_env_local: PASS
+  AC2_both_functions_exported: PASS
+  AC3_parseDocument_never_throws: PASS
+  AC4_generateReport_throws_on_failure: PASS
+  AC5_server_side_only: PASS
+  AC6_typecheck_passes: PASS
+
+concerns:
+  - id: C1
+    severity: minor
+    description: "expiryDate string format not validated — LLM could return non-YYYY-MM-DD string"
+    recommendation: "Story 4.1 (document service) should validate/normalise the date format before persisting"
+    blocking: false
+
+  - id: C2
+    severity: minor
+    description: "response.content[0] accessed without bounds check — relies on Anthropic API contract"
+    recommendation: "Acceptable given try/catch coverage; no action required in this story"
+    blocking: false
+
+  - id: C3
+    severity: minor
+    description: "'application/pdf' mimeType silently remapped to 'image/jpeg' — callers must pre-convert PDFs"
+    recommendation: "Documented in Dev Notes; Story 4.1 is responsible for PDF-to-image conversion before calling parseDocument"
+    blocking: false
+
+  - id: C4
+    severity: low
+    description: "Missing ANTHROPIC_API_KEY won't fail fast at startup (non-null assertion)"
+    recommendation: "Consider env validation at startup in a future infrastructure story"
+    blocking: false
+
+production_blockers:
+  - description: "Add ANTHROPIC_API_KEY to Vercel environment variables before first production deploy"
+    affects_stories: ["4.1", "7.3"]

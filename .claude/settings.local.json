@@ -1,0 +1,41 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls:*)",
+      "Bash(find:*)",
+      "Bash(for agent in \"C:\\\\Aykan\\\\Claude-Skills & Agents\\\\Plugins\\\\sharetribe-plugins\\\\agents\"/*)",
+      "Bash(do basename \"$agent\")",
+      "Bash(done)",
+      "Bash(grep:*)",
+      "Bash(for dir in sharetribe-*)",
+      "Bash(do echo \"$dir\")",
+      "Bash(dir \"C:\\\\Aykan\\\\Claude-Skills & Agents\\\\Plugins\\\\sharetribe-plugins\\\\skills\")",
+      "WebSearch",
+      "Bash(find c:ProjectsPersonalMotoYaardocsstories -type f \\\\\\(-name *.md -o -name *.yaml -o -name *.txt \\\\\\))",
+      "Bash(find /c/Projects/Personal/MotoYaar -type f \\\\\\(-name *.md -o -name *.yaml -o -name *.txt \\\\\\))",
+      "Bash(pnpm install:*)",
+      "Bash(npm -v)",
+      "Bash(cmd.exe /c \"pnpm --version\")",
+      "Bash(cmd.exe /c \"where pnpm\")",
+      "Read(//c/Users/**)",
+      "Read(//c/ProgramData/chocolatey/**)",
+      "Bash(npm install:*)",
+      "Bash(pnpm --version)",
+      "Bash(timeout 12 pnpm dev)",
+      "Bash(pnpm add:*)",
+      "Bash(for d:*)",
+      "Bash(do)",
+      "Bash(touch c:/Projects/Personal/MotoYaar/src/components/$d/.gitkeep)",
+      "Bash(pnpm typecheck:*)",
+      "Bash(pnpm lint:*)",
+      "Bash(pnpm db:generate)",
+      "Bash(pnpm db:migrate)",
+      "Bash(node -e \":*)",
+      "Bash(timeout 15 pnpm dev)",
+      "Bash(npm show:*)",
+      "Bash(mkdir -p public/icons)",
+      "Bash(node -e \"const p = require\\(''''next-pwa''''\\); console.log\\(typeof p, Object.keys\\(p\\)\\)\")",
+      "Bash(node --input-type=module --eval \"import withPWAInit from ''next-pwa''; console.log\\(typeof withPWAInit\\);\")"
+    ]
+  }
+}
