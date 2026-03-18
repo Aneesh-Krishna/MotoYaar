@@ -10,3 +10,4 @@ public/sw.js
 public/workbox-*.js
 
 .vs/
+tsconfig.tsbuildinfo
