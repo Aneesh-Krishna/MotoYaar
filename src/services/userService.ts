@@ -12,6 +12,7 @@ export const userService = {
       bio: string;
       profileImageUrl: string | null;
       instagramLink: string | null;
+      walkthroughSeen: boolean;
     }>
   ) {
     if (data.username) {

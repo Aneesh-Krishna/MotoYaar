@@ -15,6 +15,14 @@ export const authOptions: NextAuthOptions = {
     async signIn({ user, account }) {
       if (account?.provider === "google") {
         try {
+          const existingUser = await db.query.users.findFirst({
+            where: eq(users.googleId, account.providerAccountId),
+          });
+
+          if (existingUser?.status === "banned") {
+            return "/login?error=AccountBanned";
+          }
+
           // F-M1: target googleId explicitly so username conflicts surface as real errors
           // F-M2: fallback if Google account has no display name
           await db
@@ -49,8 +57,20 @@ export const authOptions: NextAuthOptions = {
       }
       return session;
     },
-    async jwt({ token, account }) {
+    async jwt({ token, account, trigger }) {
       if (account) token.sub = account.providerAccountId;
+
+      if ((trigger === "update" || account) && token.sub) {
+        const dbUser = await db.query.users.findFirst({
+          where: eq(users.googleId, token.sub),
+        });
+        if (dbUser) {
+          token.username = dbUser.username;
+          token.userId = dbUser.id;
+          token.walkthroughSeen = dbUser.walkthroughSeen;
+        }
+      }
+
       return token;
     },
   },

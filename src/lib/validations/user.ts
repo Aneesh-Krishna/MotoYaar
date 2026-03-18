@@ -11,6 +11,7 @@ export const updateUserSchema = z.object({
   bio: z.string().max(300).optional(),
   profileImageUrl: z.string().url().optional().nullable(),
   instagramLink: z.string().url().optional().nullable(),
+  walkthroughSeen: z.boolean().optional(),
 });
 
 export type UpdateUserInput = z.infer<typeof updateUserSchema>;
