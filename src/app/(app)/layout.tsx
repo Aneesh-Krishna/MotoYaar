@@ -1,7 +1,14 @@
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { redirect } from "next/navigation";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { SidebarNav } from "@/components/layout/SidebarNav";
 
-export default function AppLayout({ children }: { children: React.ReactNode }) {
+export default async function AppLayout({ children }: { children: React.ReactNode }) {
+  const session = await getServerSession(authOptions);
+  if (!session) redirect("/login");
+  if (!session.user.username) redirect("/onboarding");
+
   return (
     <div className="flex min-h-screen bg-surface">
       {/* Desktop sidebar — hidden on mobile */}

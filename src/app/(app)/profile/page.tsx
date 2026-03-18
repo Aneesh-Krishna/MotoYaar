@@ -9,6 +9,7 @@ import {
   Instagram,
 } from "lucide-react";
 import { TopBar } from "@/components/layout/TopBar";
+import { SignOutButton } from "@/components/ui/SignOutButton";
 import { cn } from "@/lib/utils";
 
 // ─── Mock data ────────────────────────────────────────────────────────────────
@@ -184,6 +185,9 @@ export default function ProfilePage() {
           <span className="flex-1 text-body font-semibold text-foreground">Settings</span>
           <ChevronRight size={16} className="text-foreground-muted" aria-hidden="true" />
         </Link>
+
+        {/* Sign out */}
+        <SignOutButton />
       </div>
     </>
   );
