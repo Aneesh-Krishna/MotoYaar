@@ -1,5 +1,22 @@
-import Image from "next/image";
+"use client";
+
+import { signIn } from "next-auth/react";
+import { useSearchParams } from "next/navigation";
 import { Users } from "lucide-react";
+import { Suspense } from "react";
+
+function BannedError() {
+  const searchParams = useSearchParams();
+  if (searchParams.get("error") !== "AccountBanned") return null;
+  return (
+    <div
+      role="alert"
+      className="w-full max-w-xs rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-body text-red-700"
+    >
+      Your account has been permanently suspended.
+    </div>
+  );
+}
 
 export default function LoginPage() {
   return (
@@ -16,10 +33,16 @@ export default function LoginPage() {
           </p>
         </div>
 
+        {/* Banned account error */}
+        <Suspense fallback={null}>
+          <BannedError />
+        </Suspense>
+
         {/* Google SSO button */}
         <div className="w-full max-w-xs space-y-4">
           <button
             type="button"
+            onClick={() => signIn("google", { callbackUrl: "/" })}
             className="w-full flex items-center justify-center gap-3
                        bg-white border border-border rounded-btn px-6 py-3
                        text-body font-semibold text-foreground shadow-card
