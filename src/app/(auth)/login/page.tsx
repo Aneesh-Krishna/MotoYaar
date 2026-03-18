@@ -1,4 +1,6 @@
-import Image from "next/image";
+"use client";
+
+import { signIn } from "next-auth/react";
 import { Users } from "lucide-react";
 
 export default function LoginPage() {
@@ -20,6 +22,7 @@ export default function LoginPage() {
         <div className="w-full max-w-xs space-y-4">
           <button
             type="button"
+            onClick={() => signIn("google", { callbackUrl: "/" })}
             className="w-full flex items-center justify-center gap-3
                        bg-white border border-border rounded-btn px-6 py-3
                        text-body font-semibold text-foreground shadow-card

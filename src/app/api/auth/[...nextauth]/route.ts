@@ -1,6 +1,5 @@
-// TODO: Implement in Story 2.1 — Authentication & Onboarding
-// Full implementation: src/lib/auth.ts authOptions + this route handler
 import NextAuth from "next-auth";
+import { authOptions } from "@/lib/auth";
 
-const handler = NextAuth({ providers: [] });
+const handler = NextAuth(authOptions);
 export { handler as GET, handler as POST };
