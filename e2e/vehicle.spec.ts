@@ -1,5 +1,30 @@
 import { test, expect } from "@playwright/test";
 
+// Story 3.4 — Vehicle Detail Page
+// TODO: remove test.skip and provide authenticated storageState fixture once
+// auth helpers are configured.
+
+test.skip("vehicle detail page shows 4 tabs", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/garage/test-vehicle-id");
+
+  await expect(page.getByRole("tab", { name: "Overview" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Documents" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Expenses" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Trips" })).toBeVisible();
+});
+
+test.skip("tab selection persists in URL", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/garage/test-vehicle-id");
+
+  await page.getByRole("tab", { name: "Documents" }).click();
+  await expect(page).toHaveURL(/\?tab=documents/);
+
+  await page.getByRole("tab", { name: "Expenses" }).click();
+  await expect(page).toHaveURL(/\?tab=expenses/);
+});
+
 // Story 3.3 — Add Vehicle (6-Step Wizard)
 // TODO: remove test.skip and provide authenticated storageState fixture once
 // auth helpers are configured (Story 3.1 follow-on).

@@ -1,10 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { ConflictError } from "@/lib/errors";
+import { ConflictError, ForbiddenError, NotFoundError } from "@/lib/errors";
 
 // ─── Mock DB client ────────────────────────────────────────────────────────────
 
 const mockInsert = {
   values: vi.fn().mockReturnThis(),
+  returning: vi.fn(),
+};
+
+const mockUpdate = {
+  set: vi.fn().mockReturnThis(),
+  where: vi.fn().mockReturnThis(),
   returning: vi.fn(),
 };
 
@@ -14,8 +20,12 @@ vi.mock("@/lib/db/client", () => ({
       vehicles: {
         findFirst: vi.fn(),
       },
+      vehicleAccess: {
+        findFirst: vi.fn(),
+      },
     },
     insert: vi.fn(),
+    update: vi.fn(),
   },
 }));
 
@@ -50,6 +60,61 @@ const DB_VEHICLE_ROW = {
 };
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
+
+describe("vehicleService.getWithAccessCheck", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("returns vehicle for owner", async () => {
+    (db.query.vehicles.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(DB_VEHICLE_ROW);
+
+    const result = await vehicleService.getWithAccessCheck("vehicle-uuid-1", "user-1");
+
+    expect(result.id).toBe("vehicle-uuid-1");
+    expect(result.name).toBe("My Bike");
+    // vehicleAccess should NOT be queried for owner
+    expect(db.query.vehicleAccess.findFirst).not.toHaveBeenCalled();
+  });
+
+  it("throws NotFoundError for non-existent vehicle", async () => {
+    (db.query.vehicles.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+
+    await expect(
+      vehicleService.getWithAccessCheck("non-existent-id", "user-1")
+    ).rejects.toThrow(NotFoundError);
+
+    await expect(
+      vehicleService.getWithAccessCheck("non-existent-id", "user-1")
+    ).rejects.toThrow("Vehicle not found");
+  });
+
+  it("returns vehicle for non-owner with valid access record", async () => {
+    (db.query.vehicles.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(DB_VEHICLE_ROW);
+    (db.query.vehicleAccess.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "access-uuid-1",
+      vehicleId: "vehicle-uuid-1",
+      userId: "viewer-user",
+    });
+
+    const result = await vehicleService.getWithAccessCheck("vehicle-uuid-1", "viewer-user");
+    expect(result.id).toBe("vehicle-uuid-1");
+    expect(result.name).toBe("My Bike");
+  });
+
+  it("throws ForbiddenError for non-owner without access record", async () => {
+    (db.query.vehicles.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(DB_VEHICLE_ROW);
+    (db.query.vehicleAccess.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+
+    await expect(
+      vehicleService.getWithAccessCheck("vehicle-uuid-1", "other-user")
+    ).rejects.toThrow(ForbiddenError);
+
+    await expect(
+      vehicleService.getWithAccessCheck("vehicle-uuid-1", "other-user")
+    ).rejects.toThrow("You do not have access to this vehicle");
+  });
+});
 
 describe("vehicleService.create", () => {
   beforeEach(() => {
@@ -130,5 +195,118 @@ describe("vehicleService.create", () => {
 
     const result = await vehicleService.create("user-2", BASE_INPUT);
     expect(result.userId).toBe("user-2");
+  });
+});
+
+describe("vehicleService.getByIdOwnerOnly", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("returns vehicle for owner", async () => {
+    (db.query.vehicles.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(DB_VEHICLE_ROW);
+
+    const result = await vehicleService.getByIdOwnerOnly("vehicle-uuid-1", "user-1");
+    expect(result.id).toBe("vehicle-uuid-1");
+    expect(result.name).toBe("My Bike");
+  });
+
+  it("throws NotFoundError when vehicle does not exist", async () => {
+    (db.query.vehicles.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+
+    await expect(
+      vehicleService.getByIdOwnerOnly("non-existent-id", "user-1")
+    ).rejects.toThrow(NotFoundError);
+  });
+
+  it("throws ForbiddenError when caller is not the owner", async () => {
+    (db.query.vehicles.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(DB_VEHICLE_ROW);
+
+    await expect(
+      vehicleService.getByIdOwnerOnly("vehicle-uuid-1", "other-user")
+    ).rejects.toThrow(ForbiddenError);
+  });
+});
+
+describe("vehicleService.update", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (db.update as ReturnType<typeof vi.fn>).mockReturnValue(mockUpdate);
+  });
+
+  it("updates vehicle fields for owner", async () => {
+    (db.query.vehicles.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(DB_VEHICLE_ROW);
+    const updatedRow = { ...DB_VEHICLE_ROW, name: "Updated Bike" };
+    mockUpdate.returning.mockResolvedValue([updatedRow]);
+
+    const result = await vehicleService.update("vehicle-uuid-1", "user-1", { name: "Updated Bike" });
+
+    expect(result.name).toBe("Updated Bike");
+    expect(mockUpdate.set).toHaveBeenCalled();
+  });
+
+  it("throws ForbiddenError when non-owner calls update", async () => {
+    (db.query.vehicles.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(DB_VEHICLE_ROW);
+
+    await expect(
+      vehicleService.update("vehicle-uuid-1", "other-user", { name: "Hacked" })
+    ).rejects.toThrow(ForbiddenError);
+  });
+
+  it("throws NotFoundError when vehicle does not exist", async () => {
+    (db.query.vehicles.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+
+    await expect(
+      vehicleService.update("non-existent-id", "user-1", { name: "Doesn't Matter" })
+    ).rejects.toThrow(NotFoundError);
+  });
+
+  it("throws ConflictError when registration number duplicated", async () => {
+    (db.query.vehicles.findFirst as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(DB_VEHICLE_ROW)       // ownership check
+      .mockResolvedValueOnce({ id: "other-vehicle", registrationNumber: "DL01AB9999" }); // duplicate check
+
+    await expect(
+      vehicleService.update("vehicle-uuid-1", "user-1", { registrationNumber: "DL01AB9999" })
+    ).rejects.toThrow(ConflictError);
+  });
+
+  it("does not check uniqueness when reg number is unchanged", async () => {
+    (db.query.vehicles.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(DB_VEHICLE_ROW);
+    mockUpdate.returning.mockResolvedValue([DB_VEHICLE_ROW]);
+
+    await vehicleService.update("vehicle-uuid-1", "user-1", {
+      registrationNumber: "MH12AB1234", // same as DB_VEHICLE_ROW
+    });
+
+    // findFirst should only be called once (ownership check), not twice
+    expect(db.query.vehicles.findFirst).toHaveBeenCalledTimes(1);
+  });
+
+  it("normalises registration number to uppercase before uniqueness check and update", async () => {
+    (db.query.vehicles.findFirst as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(DB_VEHICLE_ROW)   // ownership check
+      .mockResolvedValueOnce(null);             // uniqueness check — no duplicate
+    mockUpdate.returning.mockResolvedValue([{ ...DB_VEHICLE_ROW, registrationNumber: "DL01XY9999" }]);
+
+    await vehicleService.update("vehicle-uuid-1", "user-1", {
+      registrationNumber: "dl01xy9999",
+    });
+
+    const setCall = (mockUpdate.set as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(setCall.registrationNumber).toBe("DL01XY9999");
+  });
+
+  it("strips imageKey before updating DB", async () => {
+    (db.query.vehicles.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(DB_VEHICLE_ROW);
+    mockUpdate.returning.mockResolvedValue([DB_VEHICLE_ROW]);
+
+    await vehicleService.update("vehicle-uuid-1", "user-1", {
+      imageKey: "user-1/vehicles/images/new.jpg",
+      imageUrl: "https://cdn.example.com/user-1/vehicles/images/new.jpg",
+    });
+
+    const setCall = (mockUpdate.set as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(setCall).not.toHaveProperty("imageKey");
   });
 });
