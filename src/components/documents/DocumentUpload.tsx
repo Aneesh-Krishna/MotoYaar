@@ -1,14 +1,19 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Upload, Loader2, CheckCircle } from "lucide-react";
+import { Upload, Loader2, CheckCircle, Calendar as CalendarIcon } from "lucide-react";
 import { motion } from "framer-motion";
+import { format } from "date-fns";
+import { toast } from "sonner";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 import type { DocumentType } from "@/types";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const ACCEPTED_TYPES = ["image/jpeg", "image/png", "application/pdf"];
 
-type Screen = "upload" | "parsing" | "confirm" | "saved";
+type UploadScreen = "upload" | "parsing" | "confirm" | "manual" | "complete";
 
 interface ParseResult {
   extractedExpiryDate: string | null;
@@ -22,23 +27,25 @@ interface DocumentUploadProps {
   vehicleId: string;
   storagePreference: "parse_only" | "full_storage";
   onSuccess: () => void;
-  onManualEntry?: () => void;
 }
 
 export function DocumentUpload({
   vehicleId,
   storagePreference,
   onSuccess,
-  onManualEntry,
 }: DocumentUploadProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [screen, setScreen] = useState<Screen>("upload");
+  const [screen, setScreen] = useState<UploadScreen>("upload");
   const [docType, setDocType] = useState<DocumentType | "">("");
   const [label, setLabel] = useState("");
   const [expiryDate, setExpiryDate] = useState("");
   const [parseResult, setParseResult] = useState<ParseResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  // Manual entry screen state
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
+  const [calendarOpen, setCalendarOpen] = useState(false);
 
   async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -98,13 +105,8 @@ export function DocumentUpload({
         setExpiryDate(result.extractedExpiryDate);
         setScreen("confirm");
       } else {
-        // No date extracted — fall through to manual entry
-        if (onManualEntry) {
-          onManualEntry();
-        } else {
-          // Fallback: show confirm screen with empty date for manual input
-          setScreen("confirm");
-        }
+        // No date extracted — transition to manual entry screen (AC: 1)
+        setScreen("manual");
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed. Please try again.");
@@ -140,9 +142,71 @@ export function DocumentUpload({
         throw new Error(data.error ?? "Save failed");
       }
 
-      setScreen("saved"); // SF-1: Screen 4 — save confirmation
+      setScreen("complete"); // SF-1: Screen 4 — save confirmation
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed. Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // AC: 4 — Save with date: parseStatus="manual"
+  async function handleManualSave() {
+    if (!selectedDate || !docType) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/vehicles/${vehicleId}/documents`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: docType,
+          label: docType === "Other" ? label : undefined,
+          expiryDate: format(selectedDate, "yyyy-MM-dd"),
+          parseStatus: "manual",
+          tempR2Key: parseResult?.tempR2Key ?? undefined,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error ?? "Save failed");
+      }
+
+      toast.success("Document saved");
+      onSuccess();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save document. Try again.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // AC: 3 — Skip: parseStatus="incomplete", expiryDate=null
+  async function handleSkip() {
+    if (!docType) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/vehicles/${vehicleId}/documents`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: docType,
+          label: docType === "Other" ? label : undefined,
+          expiryDate: undefined, // null in DB
+          parseStatus: "incomplete",
+          tempR2Key: parseResult?.tempR2Key ?? undefined,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error ?? "Save failed");
+      }
+
+      toast.success("Document saved as incomplete");
+      onSuccess();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save document. Try again.");
     } finally {
       setSaving(false);
     }
@@ -211,8 +275,74 @@ export function DocumentUpload({
     );
   }
 
-  // ─── Screen 4: Save confirmation ──────────────────────────────────────────
-  if (screen === "saved") {
+  // ─── Screen 4 (manual): Manual expiry entry ───────────────────────────────
+  // AC: 1, 7 — shown when AI returns no date OR user taps "Enter manually"
+  if (screen === "manual") {
+    return (
+      <div className="flex flex-col gap-6 p-4">
+        <div className="text-center">
+          <h3 className="font-semibold text-gray-800">Enter Expiry Date</h3>
+          <p className="text-sm text-gray-500 mt-1">
+            {parseResult && !parseResult.extractedExpiryDate
+              ? "We couldn't read the date from your document."
+              : "Enter the date manually."}
+          </p>
+        </div>
+
+        {/* AC: 2 — shadcn Calendar inside Popover */}
+        <div className="flex flex-col gap-2">
+          <label className="text-sm font-medium text-gray-700">Expiry Date</label>
+          <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+            <PopoverTrigger asChild>
+              <button
+                className={cn(
+                  "flex items-center gap-2 border rounded-lg px-3 py-2 text-sm w-full",
+                  !selectedDate && "text-gray-400"
+                )}
+              >
+                <CalendarIcon size={16} />
+                {/* AC: 2 — date formatted as "d MMMM yyyy" */}
+                {selectedDate ? format(selectedDate, "d MMMM yyyy") : "Select date"}
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0">
+              {/* Note: no fromDate constraint — past dates allowed (e.g. logging expired insurance) */}
+              <Calendar
+                mode="single"
+                selected={selectedDate}
+                onSelect={(date) => {
+                  setSelectedDate(date);
+                  setCalendarOpen(false);
+                }}
+                autoFocus
+              />
+            </PopoverContent>
+          </Popover>
+        </div>
+
+        {/* AC: 4 — save with date → parseStatus="manual" */}
+        <button
+          onClick={handleManualSave}
+          disabled={!selectedDate || saving}
+          className="bg-orange-500 text-white w-full py-3 rounded-lg font-semibold disabled:opacity-50"
+        >
+          {saving ? <Loader2 className="animate-spin mx-auto" size={20} /> : "Save Document"}
+        </button>
+
+        {/* AC: 3 — skip → parseStatus="incomplete" */}
+        <button
+          onClick={handleSkip}
+          disabled={saving}
+          className="text-gray-500 text-sm underline text-center disabled:opacity-50"
+        >
+          Skip for now
+        </button>
+      </div>
+    );
+  }
+
+  // ─── Screen 5: Save confirmation ──────────────────────────────────────────
+  if (screen === "complete") {
     return (
       <div className="flex flex-col items-center justify-center gap-4 py-16 px-8 text-center">
         <div className="h-16 w-16 rounded-full bg-green-100 flex items-center justify-center">
@@ -274,14 +404,13 @@ export function DocumentUpload({
         {saving ? "Saving..." : "Save Document"}
       </button>
 
-      {onManualEntry && (
-        <button
-          onClick={onManualEntry}
-          className="text-gray-500 text-sm underline text-center"
-        >
-          Enter date manually instead
-        </button>
-      )}
+      {/* AC: 1 — user can tap "Enter manually" from confirm screen → transitions to manual screen (AC: 7) */}
+      <button
+        onClick={() => setScreen("manual")}
+        className="text-gray-500 text-sm underline text-center"
+      >
+        Enter date manually instead
+      </button>
     </div>
   );
 }

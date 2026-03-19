@@ -1,31 +1,18 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
-import { generateUploadUrl, deleteObject } from "@/lib/r2";
+import { putObject, deleteObject } from "@/lib/r2";
 import { handleApiError } from "@/lib/errors";
 import path from "path";
+
 const ALLOWED_CONTENT_TYPES = ["image/jpeg", "image/png", "image/webp"];
-const MAX_FILENAME_LENGTH = 100;
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
 
 export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session) {
       return NextResponse.json({ error: { code: "UNAUTHORIZED" } }, { status: 401 });
-    }
-
-    const { filename, contentType } = await req.json();
-
-    if (!contentType || !ALLOWED_CONTENT_TYPES.includes(contentType)) {
-      return NextResponse.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: "Invalid file type. Only JPEG, PNG, and WebP are allowed.",
-          },
-        },
-        { status: 422 }
-      );
     }
 
     const r2PublicUrl = process.env.R2_PUBLIC_URL;
@@ -37,13 +24,44 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const ext = path.extname(String(filename ?? "upload")).slice(0, MAX_FILENAME_LENGTH) || ".jpg";
+    const formData = await req.formData();
+    const file = formData.get("file") as File | null;
+
+    if (!file) {
+      return NextResponse.json(
+        { error: { code: "VALIDATION_ERROR", message: "file is required" } },
+        { status: 422 }
+      );
+    }
+
+    if (!ALLOWED_CONTENT_TYPES.includes(file.type)) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Invalid file type. Only JPEG, PNG, and WebP are allowed.",
+          },
+        },
+        { status: 422 }
+      );
+    }
+
+    if (file.size > MAX_FILE_SIZE) {
+      return NextResponse.json(
+        { error: { code: "VALIDATION_ERROR", message: "Image must be under 5 MB." } },
+        { status: 422 }
+      );
+    }
+
+    const ext = path.extname(file.name).slice(0, 10) || ".jpg";
     const safeName = `${crypto.randomUUID()}${ext}`;
     const key = `${session.user.id}/vehicles/images/${safeName}`;
-    const uploadUrl = await generateUploadUrl(key, contentType, 300); // 5-minute TTL for potentially large images
-    const publicUrl = `${r2PublicUrl}/${key}`;
 
-    return NextResponse.json({ uploadUrl, key, publicUrl });
+    const buffer = Buffer.from(await file.arrayBuffer());
+    await putObject(key, buffer, file.type);
+
+    const publicUrl = `${r2PublicUrl}/${key}`;
+    return NextResponse.json({ key, publicUrl });
   } catch (error) {
     return handleApiError(error);
   }
