@@ -2,10 +2,11 @@
 
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { FileText, Receipt, Map } from "lucide-react";
+import { Receipt, Map } from "lucide-react";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { DocumentsTab } from "@/components/documents/DocumentsTab";
 import { formatINR, formatDate, getDocumentStatus } from "@/lib/utils";
-import type { Vehicle } from "@/types";
+import type { Vehicle, Document } from "@/types";
 
 interface Props {
   vehicle: Vehicle;
@@ -13,6 +14,8 @@ interface Props {
   totalSpend: number;
   lastService: string | null;
   nextExpiry: string | null;
+  storagePreference: "parse_only" | "full_storage";
+  documents: Document[];
 }
 
 const TABS = [
@@ -28,6 +31,8 @@ export function VehicleDetailTabs({
   totalSpend,
   lastService,
   nextExpiry,
+  storagePreference,
+  documents,
 }: Props) {
   const router = useRouter();
   const pathname = usePathname();
@@ -81,11 +86,10 @@ export function VehicleDetailTabs({
           />
         )}
         {activeTab === "documents" && (
-          <PlaceholderTab
-            Icon={FileText}
-            message="No documents yet. Add your RC, Insurance, and PUC."
-            ctaLabel="Add document"
-            ctaHref={`/garage/${vehicle.id}/documents/new`}
+          <DocumentsTab
+            vehicleId={vehicle.id}
+            documents={documents}
+            storagePreference={storagePreference}
           />
         )}
         {activeTab === "expenses" && (
@@ -158,19 +162,29 @@ interface PlaceholderTabProps {
   Icon: React.ElementType;
   message: string;
   ctaLabel: string;
-  ctaHref: string;
+  ctaHref?: string;
+  onCtaClick?: () => void;
 }
 
-function PlaceholderTab({ Icon, message, ctaLabel, ctaHref }: PlaceholderTabProps) {
+function PlaceholderTab({ Icon, message, ctaLabel, ctaHref, onCtaClick }: PlaceholderTabProps) {
   return (
     <div className="flex flex-col items-center justify-center py-16 gap-4 text-center px-8">
       <Icon size={48} className="text-gray-300" aria-hidden="true" />
       <p className="text-gray-500 text-sm">{message}</p>
-      <Link href={ctaHref}>
-        <button className="bg-orange-500 text-white px-5 py-2 rounded-lg text-sm font-semibold">
+      {onCtaClick ? (
+        <button
+          onClick={onCtaClick}
+          className="bg-orange-500 text-white px-5 py-2 rounded-lg text-sm font-semibold"
+        >
           {ctaLabel}
         </button>
-      </Link>
+      ) : (
+        <Link href={ctaHref!}>
+          <button className="bg-orange-500 text-white px-5 py-2 rounded-lg text-sm font-semibold">
+            {ctaLabel}
+          </button>
+        </Link>
+      )}
     </div>
   );
 }

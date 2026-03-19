@@ -58,6 +58,7 @@ export interface Document {
   label?: string;
   expiryDate?: string;
   storageUrl?: string;
+  storageKey?: string;
   parseStatus: "parsed" | "manual" | "incomplete";
   status: DocumentStatus;
   createdAt: string;

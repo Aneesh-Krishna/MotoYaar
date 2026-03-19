@@ -192,6 +192,7 @@ export const documents = pgTable(
     label: text("label"),
     expiryDate: date("expiry_date"),
     storageUrl: text("storage_url"),
+    storageKey: text("storage_key"),
     parseStatus: text("parse_status").notNull().default("manual"),
     status: text("status").notNull().default("valid"),
     expiryWarningNotifiedAt: timestamp("expiry_warning_notified_at", { withTimezone: true }),

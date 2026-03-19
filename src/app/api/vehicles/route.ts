@@ -1,5 +1,4 @@
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { getSession } from "@/lib/session";
 import { NextResponse } from "next/server";
 import { vehicleService } from "@/services/vehicleService";
 import { createVehicleSchema } from "@/lib/validations/vehicle";
@@ -7,7 +6,7 @@ import { handleApiError } from "@/lib/errors";
 
 export async function GET() {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getSession();
     if (!session) {
       return NextResponse.json({ error: { code: "UNAUTHORIZED" } }, { status: 401 });
     }
@@ -20,7 +19,7 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getSession();
     if (!session) {
       return NextResponse.json({ error: { code: "UNAUTHORIZED" } }, { status: 401 });
     }

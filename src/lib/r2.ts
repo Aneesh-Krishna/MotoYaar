@@ -1,4 +1,5 @@
 import {
+  CopyObjectCommand,
   DeleteObjectCommand,
   GetObjectCommand,
   PutObjectCommand,
@@ -41,13 +42,31 @@ export async function generateUploadUrl(
   return getSignedUrl(r2, command, { expiresIn });
 }
 
-/** Generate a pre-signed GET URL for private document access (15-min TTL) */
-export async function generateAccessUrl(key: string): Promise<string> {
+/** Generate a pre-signed GET URL for private document access (default 15-min TTL) */
+export async function generateAccessUrl(key: string, expiresInSeconds = 900): Promise<string> {
   const command = new GetObjectCommand({ Bucket: BUCKET, Key: key });
-  return getSignedUrl(r2, command, { expiresIn: 900 }); // 15 minutes
+  return getSignedUrl(r2, command, { expiresIn: expiresInSeconds });
 }
 
 /** Delete an object from R2 */
 export async function deleteObject(key: string): Promise<void> {
   await r2.send(new DeleteObjectCommand({ Bucket: BUCKET, Key: key }));
+}
+
+/** Upload a buffer directly to R2 (server-side upload, bypasses presigned URL) */
+export async function putObject(key: string, body: Buffer, contentType: string): Promise<void> {
+  await r2.send(
+    new PutObjectCommand({ Bucket: BUCKET, Key: key, Body: body, ContentType: contentType })
+  );
+}
+
+/** Copy an object within R2 (used to move temp files to permanent keys) */
+export async function copyObject(sourceKey: string, destKey: string): Promise<void> {
+  await r2.send(
+    new CopyObjectCommand({
+      Bucket: BUCKET,
+      CopySource: `${BUCKET}/${sourceKey}`,
+      Key: destKey,
+    })
+  );
 }

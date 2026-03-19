@@ -42,19 +42,11 @@ export const authOptions: NextAuthOptions = {
       return true;
     },
     async session({ session, token }) {
-      if (token.sub) {
-        const dbUser = await db.query.users.findFirst({
-          where: eq(users.googleId, token.sub),
-        });
-        // F-H2: guard against missing DB record (e.g. insert failed silently)
-        if (!dbUser) {
-          console.warn("[auth] Session user not found in DB for googleId:", token.sub);
-          return session;
-        }
-        session.user.id = dbUser.id;
-        session.user.username = dbUser.username;
-        session.user.walkthroughSeen = dbUser.walkthroughSeen;
-      }
+      // Read from JWT token — avoids a DB hit on every session access.
+      // The jwt callback below keeps these fields fresh (on sign-in and trigger="update").
+      if (token.userId) session.user.id = token.userId as string;
+      if (token.username !== undefined) session.user.username = token.username as string | null;
+      if (token.walkthroughSeen !== undefined) session.user.walkthroughSeen = token.walkthroughSeen as boolean;
       return session;
     },
     async jwt({ token, account, trigger }) {

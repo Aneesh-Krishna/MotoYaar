@@ -1,5 +1,4 @@
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { getSession } from "@/lib/session";
 import { NextRequest, NextResponse } from "next/server";
 import { generateUploadUrl } from "@/lib/r2";
 import { handleApiError } from "@/lib/errors";
@@ -10,7 +9,7 @@ const MAX_FILENAME_LENGTH = 100;
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getSession();
     if (!session) {
       return NextResponse.json({ error: { code: "UNAUTHORIZED" } }, { status: 401 });
     }

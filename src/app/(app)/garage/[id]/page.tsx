@@ -1,6 +1,8 @@
 import { Suspense } from "react";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { getSession } from "@/lib/session";
+import { db } from "@/lib/db/client";
+import { users } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
 import { vehicleService } from "@/services/vehicleService";
 import { expenseService } from "@/services/expenseService";
 import { documentService } from "@/services/documentService";
@@ -15,7 +17,7 @@ interface Props {
 }
 
 export default async function VehicleDetailPage({ params, searchParams }: Props) {
-  const session = await getServerSession(authOptions);
+  const session = await getSession();
   if (!session) redirect("/login");
 
   try {
@@ -23,11 +25,16 @@ export default async function VehicleDetailPage({ params, searchParams }: Props)
     const VALID_TABS = ["overview", "documents", "expenses", "trips"];
     const activeTab = VALID_TABS.includes(searchParams.tab ?? "") ? searchParams.tab! : "overview";
 
-    const [totalSpend, lastService, nextExpiry] = await Promise.all([
+    const [totalSpend, lastService, nextExpiry, documents, dbUser] = await Promise.all([
       expenseService.sumByVehicle(vehicle.id),
       expenseService.lastServiceDate(vehicle.id),
       documentService.nextExpiry(vehicle.id),
+      documentService.listByVehicle(vehicle.id, session.user.id),
+      db.query.users.findFirst({ where: eq(users.id, session.user.id) }),
     ]);
+
+    const storagePreference =
+      (dbUser?.documentStoragePreference as "parse_only" | "full_storage") ?? "parse_only";
 
     return (
       <div className="min-h-screen bg-gray-50">
@@ -39,6 +46,8 @@ export default async function VehicleDetailPage({ params, searchParams }: Props)
             totalSpend={totalSpend}
             lastService={lastService}
             nextExpiry={nextExpiry}
+            storagePreference={storagePreference}
+            documents={documents}
           />
         </Suspense>
       </div>

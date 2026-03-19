@@ -13,6 +13,7 @@ export const userService = {
       profileImageUrl: string | null;
       instagramLink: string | null;
       walkthroughSeen: boolean;
+      documentStoragePreference: "parse_only" | "full_storage";
     }>
   ) {
     if (data.username) {
@@ -41,4 +42,5 @@ export const userService = {
     if (!user) throw new NotFoundError("User not found");
     return user;
   },
+
 };

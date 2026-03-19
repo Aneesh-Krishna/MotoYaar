@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import Image from "next/image";
 import { FileText, Camera } from "lucide-react";
 import { toast } from "sonner";
 import { StepWizard } from "@/components/ui/StepWizard";
@@ -51,8 +50,10 @@ interface WizardData {
   registrationNumber: string;
   purchasedAt: string;
   previousOwners: number;
-  imageUrl: string;
-  imageKey: string;
+  /** Blob URL for local preview only — not sent to the server */
+  imagePreviewUrl: string;
+  /** The actual File object, uploaded to R2 on save */
+  pendingImageFile: File | null;
 }
 
 const STEP_LABELS = ["Name & Type", "Details", "Ownership", "Photo", "Documents", "Review"];
@@ -67,8 +68,8 @@ const INITIAL_DATA: WizardData = {
   registrationNumber: "",
   purchasedAt: "",
   previousOwners: 0,
-  imageUrl: "",
-  imageKey: "",
+  imagePreviewUrl: "",
+  pendingImageFile: null,
 };
 
 // ─── Step components ──────────────────────────────────────────────────────────
@@ -252,19 +253,15 @@ function Step3({
 }
 
 function Step4({
-  imageUrl,
-  imageKey,
+  imagePreviewUrl,
   onNext,
-  onImageUploaded,
+  onImageSelected,
 }: {
-  imageUrl: string;
-  imageKey: string;
+  imagePreviewUrl: string;
   onNext: () => void;
-  onImageUploaded: (url: string, key: string) => void;
+  onImageSelected: (file: File, previewUrl: string) => void;
 }) {
-  const [uploading, setUploading] = useState(false);
-
-  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -277,45 +274,20 @@ function Step4({
       return;
     }
 
-    setUploading(true);
-    try {
-      // Delete old image if one exists
-      if (imageKey) {
-        await fetch(`/api/uploads/vehicle-image?key=${encodeURIComponent(imageKey)}`, {
-          method: "DELETE",
-        });
-      }
-
-      const res = await fetch("/api/uploads/vehicle-image", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ filename: file.name, contentType: file.type }),
-      });
-      if (!res.ok) throw new Error("Failed to get upload URL");
-      const { uploadUrl, key, publicUrl } = await res.json();
-
-      const putRes = await fetch(uploadUrl, {
-        method: "PUT",
-        headers: { "Content-Type": file.type },
-        body: file,
-      });
-      if (!putRes.ok) throw new Error(`R2 upload failed: ${putRes.status}`);
-
-      onImageUploaded(publicUrl, key);
-    } catch {
-      toast.error("Image upload failed. Please try again.");
-    } finally {
-      setUploading(false);
-    }
+    const previewUrl = URL.createObjectURL(file);
+    onImageSelected(file, previewUrl);
   }
 
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-col items-center gap-4 py-4">
-        {imageUrl ? (
-          <div className="relative w-full max-w-xs aspect-video rounded-lg overflow-hidden bg-gray-100">
-            <Image src={imageUrl} alt="Vehicle" fill className="object-cover" sizes="320px" />
-          </div>
+        {imagePreviewUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={imagePreviewUrl}
+            alt="Vehicle preview"
+            className="w-full max-w-xs aspect-video rounded-lg object-cover bg-gray-100"
+          />
         ) : (
           <div className="w-full max-w-xs aspect-video rounded-lg bg-gray-100 flex items-center justify-center">
             <Camera size={40} className="text-gray-300" />
@@ -323,23 +295,21 @@ function Step4({
         )}
 
         <label className="cursor-pointer bg-white border border-orange-500 text-orange-500 px-5 py-2.5 rounded-lg font-semibold text-sm w-full text-center">
-          {uploading ? "Uploading…" : imageUrl ? "Change Photo" : "Upload Photo"}
+          {imagePreviewUrl ? "Change Photo" : "Upload Photo"}
           <input
             type="file"
             accept="image/jpeg,image/png,image/webp"
             className="hidden"
             onChange={handleFileChange}
-            disabled={uploading}
           />
         </label>
       </div>
 
       <button
         onClick={onNext}
-        disabled={uploading}
-        className="bg-orange-500 text-white px-6 py-3 rounded-lg font-semibold w-full disabled:opacity-50"
+        className="bg-orange-500 text-white px-6 py-3 rounded-lg font-semibold w-full"
       >
-        {imageUrl ? "Next" : "Skip"}
+        {imagePreviewUrl ? "Next" : "Skip"}
       </button>
     </div>
   );
@@ -349,10 +319,10 @@ function Step5({ onNext }: { onNext: () => void }) {
   return (
     <div className="flex flex-col items-center gap-4 py-8 text-center">
       <FileText size={48} className="text-gray-300" />
-      <h3 className="font-semibold text-lg">Add Documents Later</h3>
+      <h3 className="font-semibold text-lg">Documents</h3>
       <p className="text-sm text-gray-500">
-        You can upload your RC, Insurance, and PUC after saving the vehicle.
-        We&apos;ll remind you from the vehicle detail page.
+        Save your vehicle first, then add your RC, Insurance, and PUC.
+        You&apos;ll land on the Documents tab right after saving.
       </p>
       <button
         onClick={onNext}
@@ -377,6 +347,7 @@ function Step6({
   onEdit: (step: number) => void;
   onSave: () => Promise<void>;
   conflictError: string | null;
+  saving?: boolean;
 }) {
   const [saving, setSaving] = useState(false);
 
@@ -427,10 +398,13 @@ function Step6({
 
       {/* Photo */}
       <ReviewSection title="Photo" onEdit={() => onEdit(3)}>
-        {data.imageUrl ? (
-          <div className="relative w-24 h-16 rounded overflow-hidden bg-gray-100 mt-1">
-            <Image src={data.imageUrl} alt="Vehicle" fill className="object-cover" sizes="96px" />
-          </div>
+        {data.imagePreviewUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={data.imagePreviewUrl}
+            alt="Vehicle preview"
+            className="w-24 h-16 rounded object-cover bg-gray-100 mt-1"
+          />
         ) : (
           <p className="text-sm text-gray-400">No photo</p>
         )}
@@ -522,13 +496,31 @@ export function AddVehicleWizard() {
     goToNextStep();
   }
 
-  function handleImageUploaded(url: string, key: string) {
-    setWizardData((prev) => ({ ...prev, imageUrl: url, imageKey: key }));
+  function handleImageSelected(file: File, previewUrl: string) {
+    setWizardData((prev) => ({ ...prev, pendingImageFile: file, imagePreviewUrl: previewUrl }));
   }
 
   async function handleSave() {
     setConflictError(null);
     try {
+      let imageUrl: string | undefined;
+      let imageKey: string | undefined;
+
+      if (wizardData.pendingImageFile) {
+        const formData = new FormData();
+        formData.append("file", wizardData.pendingImageFile);
+        const res = await fetch("/api/uploads/vehicle-image", { method: "POST", body: formData });
+        if (!res.ok) {
+          const errBody = await res.json().catch(() => ({}));
+          console.error("[vehicle-image] upload failed", res.status, errBody);
+          toast.error("Image upload failed. Please try again.");
+          return;
+        }
+        const data = await res.json();
+        imageUrl = data.publicUrl;
+        imageKey = data.key;
+      }
+
       const payload = {
         name: wizardData.name,
         type: wizardData.type as VehicleType,
@@ -539,11 +531,13 @@ export function AddVehicleWizard() {
         registrationNumber: wizardData.registrationNumber,
         purchasedAt: wizardData.purchasedAt || undefined,
         previousOwners: wizardData.previousOwners,
-        imageUrl: wizardData.imageUrl || undefined,
-        imageKey: wizardData.imageKey || undefined,
+        imageUrl,
+        imageKey,
       };
       const vehicle = await createVehicle(payload);
-      router.push(`/garage/${vehicle.id}`);
+      // Open the documents tab directly so user can add documents immediately
+      router.push(`/garage/${vehicle.id}?tab=documents`);
+      router.refresh();
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
         setConflictError("You already have a vehicle with this registration number");
@@ -584,10 +578,9 @@ export function AddVehicleWizard() {
       )}
       {step === 3 && (
         <Step4
-          imageUrl={wizardData.imageUrl}
-          imageKey={wizardData.imageKey}
+          imagePreviewUrl={wizardData.imagePreviewUrl}
           onNext={goToNextStep}
-          onImageUploaded={handleImageUploaded}
+          onImageSelected={handleImageSelected}
         />
       )}
       {step === 4 && <Step5 onNext={goToNextStep} />}
