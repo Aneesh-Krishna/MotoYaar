@@ -1,6 +1,6 @@
 import { db } from "@/lib/db/client";
 import { documents, users, vehicles } from "@/lib/db/schema";
-import { eq, asc } from "drizzle-orm";
+import { eq, asc, isNull, and } from "drizzle-orm";
 import { storageService } from "@/services/storageService";
 import { vehicleService } from "@/services/vehicleService";
 import { logger } from "@/lib/logger";
@@ -166,6 +166,70 @@ export const documentService = {
       .returning();
 
     return mapRow(updated);
+  },
+
+  async createUserDocument(userId: string, data: CreateDocumentInput): Promise<Document> {
+    // Security: validate tempR2Key belongs to this user's temp namespace
+    if (data.tempR2Key && !data.tempR2Key.startsWith(`${userId}/documents/temp/`)) {
+      throw new ForbiddenError("Invalid file reference");
+    }
+
+    const user = await db.query.users.findFirst({ where: eq(users.id, userId) });
+    const pref = user?.documentStoragePreference ?? "parse_only";
+    const notificationWindowDays = user?.notificationWindowDays ?? 30;
+
+    let storageUrl: string | null = null;
+    let storageKey: string | null = null;
+
+    if (data.tempR2Key) {
+      if (pref === "full_storage") {
+        const ext = data.tempR2Key.endsWith(".png") ? "png" : "jpg";
+        const permanentKey = `${userId}/documents/dl/${crypto.randomUUID()}.${ext}`;
+        await storageService.copyFile(data.tempR2Key, permanentKey);
+        await storageService.deleteFile(data.tempR2Key).catch((e) =>
+          logger.error({ error: e }, "Failed to delete DL temp R2 file after copy")
+        );
+        storageUrl = permanentKey;
+        storageKey = permanentKey;
+      } else {
+        await storageService.deleteFile(data.tempR2Key).catch((e) =>
+          logger.error({ error: e }, "Failed to delete DL temp R2 file after parse")
+        );
+      }
+    }
+
+    const status = computeDocumentStatus(data.expiryDate, notificationWindowDays);
+
+    const [doc] = await db
+      .insert(documents)
+      .values({
+        vehicleId: null,
+        userId,
+        type: "DL",
+        label: data.label,
+        expiryDate: data.expiryDate ?? null,
+        storageUrl,
+        storageKey,
+        parseStatus: data.parseStatus,
+        status,
+      })
+      .returning();
+
+    return mapRow(doc);
+  },
+
+  async listUserDocuments(userId: string): Promise<Document[]> {
+    const user = await db.query.users.findFirst({ where: eq(users.id, userId) });
+    const windowDays = user?.notificationWindowDays ?? 30;
+
+    const docs = await db.query.documents.findMany({
+      where: and(eq(documents.userId, userId), isNull(documents.vehicleId)),
+    });
+
+    return docs.map((doc) => ({
+      ...mapRow(doc),
+      status: computeDocumentStatus(doc.expiryDate ?? null, windowDays),
+    }));
   },
 
   async delete(docId: string, userId: string): Promise<void> {

@@ -12,7 +12,8 @@ import type { Document, DocumentType } from "@/types";
 
 interface DocumentEditFormProps {
   document: Document;
-  vehicleId: string;
+  vehicleId?: string;
+  mode?: "vehicle" | "dl";
   storagePreference: "parse_only" | "full_storage";
   onSaved: () => void;
   onCancel: () => void;
@@ -23,6 +24,7 @@ const DOC_TYPES: DocumentType[] = ["RC", "Insurance", "PUC", "DL", "Other"];
 export function DocumentEditForm({
   document,
   vehicleId,
+  mode = "vehicle",
   storagePreference,
   onSaved,
   onCancel,
@@ -56,6 +58,7 @@ export function DocumentEditForm({
     return (
       <DocumentUpload
         vehicleId={vehicleId}
+        mode={mode}
         storagePreference={storagePreference}
         onSuccess={async () => {
           await deleteDocument(document.id).catch(() => {
@@ -71,21 +74,23 @@ export function DocumentEditForm({
     <div className="flex flex-col gap-4 p-4">
       <h3 className="font-semibold text-gray-800">Edit Document</h3>
 
-      {/* Document Type */}
-      <div>
-        <label className="text-sm font-medium text-gray-700">Document Type</label>
-        <select
-          value={docType}
-          onChange={(e) => setDocType(e.target.value as DocumentType)}
-          className="mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm w-full bg-white focus:outline-none focus:ring-2 focus:ring-orange-400 text-gray-700"
-        >
-          {DOC_TYPES.map((t) => (
-            <option key={t} value={t}>
-              {t}
-            </option>
-          ))}
-        </select>
-      </div>
+      {/* Document Type — hidden for DL (type is locked) */}
+      {mode === "vehicle" && (
+        <div>
+          <label className="text-sm font-medium text-gray-700">Document Type</label>
+          <select
+            value={docType}
+            onChange={(e) => setDocType(e.target.value as DocumentType)}
+            className="mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm w-full bg-white focus:outline-none focus:ring-2 focus:ring-orange-400 text-gray-700"
+          >
+            {DOC_TYPES.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {/* Expiry Date */}
       <div>
