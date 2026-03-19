@@ -1,5 +1,4 @@
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { getSession } from "@/lib/session";
 import { NextRequest, NextResponse } from "next/server";
 import { userService } from "@/services/userService";
 import { handleApiError } from "@/lib/errors";
@@ -7,7 +6,7 @@ import { updateUserSchema } from "@/lib/validations/user";
 
 export async function PATCH(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getSession();
     if (!session) {
       return NextResponse.json({ error: { code: "UNAUTHORIZED" } }, { status: 401 });
     }

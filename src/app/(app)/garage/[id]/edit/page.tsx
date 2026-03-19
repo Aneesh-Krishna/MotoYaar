@@ -1,12 +1,11 @@
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { getSession } from "@/lib/session";
 import { vehicleService } from "@/services/vehicleService";
 import { redirect, notFound } from "next/navigation";
 import { ForbiddenError, NotFoundError } from "@/lib/errors";
 import { EditVehicleForm } from "@/components/vehicles/EditVehicleForm";
 
 export default async function EditVehiclePage({ params }: { params: { id: string } }) {
-  const session = await getServerSession(authOptions);
+  const session = await getSession();
   if (!session) redirect("/login");
 
   try {

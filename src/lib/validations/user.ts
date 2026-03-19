@@ -12,6 +12,7 @@ export const updateUserSchema = z.object({
   profileImageUrl: z.string().url().optional().nullable(),
   instagramLink: z.string().url().optional().nullable(),
   walkthroughSeen: z.boolean().optional(),
+  documentStoragePreference: z.enum(["parse_only", "full_storage"]).optional(),
 });
 
 export type UpdateUserInput = z.infer<typeof updateUserSchema>;

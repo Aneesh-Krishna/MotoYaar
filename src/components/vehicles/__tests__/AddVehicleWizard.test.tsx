@@ -162,7 +162,7 @@ describe("AddVehicleWizard", () => {
     await user.click(screen.getByRole("button", { name: /save vehicle/i }));
 
     await waitFor(() => {
-      expect(mockRouterPush).toHaveBeenCalledWith("/garage/abc-123");
+      expect(mockRouterPush).toHaveBeenCalledWith("/garage/abc-123?tab=documents");
     });
   });
 
