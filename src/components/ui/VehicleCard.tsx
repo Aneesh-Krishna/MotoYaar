@@ -12,6 +12,13 @@ interface VehicleCardProps {
   className?: string;
 }
 
+const TYPE_DISPLAY_MAP: Record<string, string> = {
+  "2-wheeler": "2W",
+  "4-wheeler": "4W",
+  "truck": "Truck",
+  "other": "Other",
+};
+
 export function VehicleCard({ vehicle, compact = false, className }: VehicleCardProps) {
   const content = (
     <>
@@ -52,8 +59,8 @@ export function VehicleCard({ vehicle, compact = false, className }: VehicleCard
               {vehicle.registrationNumber}
             </p>
           </div>
-          <span className="shrink-0 rounded-full bg-gray-100 text-foreground-muted text-caption px-2 py-0.5 font-medium capitalize">
-            {vehicle.type}
+          <span className="shrink-0 rounded-full bg-gray-100 text-foreground-muted text-caption px-2 py-0.5 font-medium">
+            {TYPE_DISPLAY_MAP[vehicle.type] ?? "Other"}
           </span>
         </div>
 

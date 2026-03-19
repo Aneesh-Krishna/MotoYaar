@@ -3,6 +3,8 @@ import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { SidebarNav } from "@/components/layout/SidebarNav";
+import { TopBar } from "@/components/layout/TopBar";
+import { FAB } from "@/components/layout/FAB";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
@@ -10,17 +12,23 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (!session.user.username) redirect("/onboarding");
 
   return (
-    <div className="flex min-h-screen bg-surface">
-      {/* Desktop sidebar — hidden on mobile */}
+    <div className="min-h-screen bg-[#FAFAF8]">
+      {/* Fixed top bar — mobile only */}
+      <TopBar />
+
+      {/* Fixed left sidebar — desktop only */}
       <SidebarNav />
 
       {/* Main content */}
-      <main className="flex-1 min-w-0">
+      <main className="pt-14 pb-20 lg:pl-60 lg:pt-0 lg:pb-0">
         {children}
       </main>
 
-      {/* Mobile bottom nav — hidden on desktop */}
+      {/* Fixed bottom nav — mobile only */}
       <BottomNav />
+
+      {/* Context-sensitive FAB */}
+      <FAB />
     </div>
   );
 }

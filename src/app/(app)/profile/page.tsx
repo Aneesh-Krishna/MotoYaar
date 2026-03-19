@@ -8,7 +8,6 @@ import {
   Settings,
   Instagram,
 } from "lucide-react";
-import { TopBar } from "@/components/layout/TopBar";
 import { SignOutButton } from "@/components/ui/SignOutButton";
 import { cn } from "@/lib/utils";
 
@@ -64,19 +63,6 @@ function ProfileActionCard({
 export default function ProfilePage() {
   return (
     <>
-      <TopBar
-        title="Profile"
-        actions={
-          <Link
-            href="/profile/settings"
-            aria-label="Open settings"
-            className="flex items-center justify-center w-9 h-9 rounded-full text-foreground-muted hover:text-foreground hover:bg-gray-100 transition-colors"
-          >
-            <Settings size={20} aria-hidden="true" />
-          </Link>
-        }
-      />
-
       <div className="px-screen-x py-5 space-y-5 max-w-screen-xl mx-auto lg:px-screen-x-md">
 
         {/* Profile header */}

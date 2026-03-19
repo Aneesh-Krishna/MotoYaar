@@ -22,7 +22,7 @@ export const users = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     googleId: text("google_id").unique().notNull(),
     name: text("name").notNull(),
-    username: text("username").unique().notNull(),
+    username: text("username").unique(),
     bio: text("bio"),
     profileImageUrl: text("profile_image_url"),
     instagramLink: text("instagram_link"),
