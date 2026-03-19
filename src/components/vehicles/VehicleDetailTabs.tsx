@@ -1,9 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { FileText, Receipt, Map } from "lucide-react";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { BottomSheet } from "@/components/ui/BottomSheet";
+import { DocumentUpload } from "@/components/documents/DocumentUpload";
 import { formatINR, formatDate, getDocumentStatus } from "@/lib/utils";
 import type { Vehicle } from "@/types";
 
@@ -13,6 +16,7 @@ interface Props {
   totalSpend: number;
   lastService: string | null;
   nextExpiry: string | null;
+  storagePreference: "parse_only" | "full_storage";
 }
 
 const TABS = [
@@ -28,10 +32,12 @@ export function VehicleDetailTabs({
   totalSpend,
   lastService,
   nextExpiry,
+  storagePreference,
 }: Props) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const [uploadOpen, setUploadOpen] = useState(false);
 
   const handleTabChange = (tabId: string) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -81,12 +87,28 @@ export function VehicleDetailTabs({
           />
         )}
         {activeTab === "documents" && (
-          <PlaceholderTab
-            Icon={FileText}
-            message="No documents yet. Add your RC, Insurance, and PUC."
-            ctaLabel="Add document"
-            ctaHref={`/garage/${vehicle.id}/documents/new`}
-          />
+          <>
+            <PlaceholderTab
+              Icon={FileText}
+              message="No documents yet. Add your RC, Insurance, and PUC."
+              ctaLabel="Add document"
+              onCtaClick={() => setUploadOpen(true)}
+            />
+            <BottomSheet
+              open={uploadOpen}
+              onClose={() => setUploadOpen(false)}
+              title="Add Document"
+            >
+              <DocumentUpload
+                vehicleId={vehicle.id}
+                storagePreference={storagePreference}
+                onSuccess={() => {
+                  setUploadOpen(false);
+                  router.refresh();
+                }}
+              />
+            </BottomSheet>
+          </>
         )}
         {activeTab === "expenses" && (
           <PlaceholderTab
@@ -158,19 +180,29 @@ interface PlaceholderTabProps {
   Icon: React.ElementType;
   message: string;
   ctaLabel: string;
-  ctaHref: string;
+  ctaHref?: string;
+  onCtaClick?: () => void;
 }
 
-function PlaceholderTab({ Icon, message, ctaLabel, ctaHref }: PlaceholderTabProps) {
+function PlaceholderTab({ Icon, message, ctaLabel, ctaHref, onCtaClick }: PlaceholderTabProps) {
   return (
     <div className="flex flex-col items-center justify-center py-16 gap-4 text-center px-8">
       <Icon size={48} className="text-gray-300" aria-hidden="true" />
       <p className="text-gray-500 text-sm">{message}</p>
-      <Link href={ctaHref}>
-        <button className="bg-orange-500 text-white px-5 py-2 rounded-lg text-sm font-semibold">
+      {onCtaClick ? (
+        <button
+          onClick={onCtaClick}
+          className="bg-orange-500 text-white px-5 py-2 rounded-lg text-sm font-semibold"
+        >
           {ctaLabel}
         </button>
-      </Link>
+      ) : (
+        <Link href={ctaHref!}>
+          <button className="bg-orange-500 text-white px-5 py-2 rounded-lg text-sm font-semibold">
+            {ctaLabel}
+          </button>
+        </Link>
+      )}
     </div>
   );
 }

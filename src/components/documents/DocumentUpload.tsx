@@ -1,0 +1,314 @@
+"use client";
+
+import { useRef, useState } from "react";
+import { Upload, Loader2, CheckCircle } from "lucide-react";
+import { motion } from "framer-motion";
+import type { DocumentType } from "@/types";
+
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const ACCEPTED_TYPES = ["image/jpeg", "image/png", "application/pdf"];
+
+type Screen = "upload" | "parsing" | "confirm" | "saved";
+
+interface ParseResult {
+  extractedExpiryDate: string | null;
+  documentType: string;
+  confidence: string;
+  parseStatus: string;
+  tempR2Key: string;
+}
+
+interface DocumentUploadProps {
+  vehicleId: string;
+  storagePreference: "parse_only" | "full_storage";
+  onSuccess: () => void;
+  onManualEntry?: () => void;
+}
+
+export function DocumentUpload({
+  vehicleId,
+  storagePreference,
+  onSuccess,
+  onManualEntry,
+}: DocumentUploadProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [screen, setScreen] = useState<Screen>("upload");
+  const [docType, setDocType] = useState<DocumentType | "">("");
+  const [label, setLabel] = useState("");
+  const [expiryDate, setExpiryDate] = useState("");
+  const [parseResult, setParseResult] = useState<ParseResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setError(null);
+
+    // Client-side validation
+    if (!ACCEPTED_TYPES.includes(file.type)) {
+      setError("Only JPG, PNG, or PDF files are supported.");
+      if (fileInputRef.current) fileInputRef.current.value = ""; // MF-2
+      return;
+    }
+    if (file.size > MAX_FILE_SIZE) {
+      setError("File is too large. Maximum size is 10MB.");
+      if (fileInputRef.current) fileInputRef.current.value = ""; // MF-2
+      return;
+    }
+    if (!docType) {
+      setError("Please select a document type first.");
+      if (fileInputRef.current) fileInputRef.current.value = ""; // MF-2
+      return;
+    }
+
+    setScreen("parsing");
+
+    try {
+      let uploadFile = file;
+
+      // PDF → PNG conversion client-side
+      if (file.type === "application/pdf") {
+        const { pdfFirstPageToBlob } = await import("@/lib/pdfToImage");
+        const blob = await pdfFirstPageToBlob(file);
+        uploadFile = new File([blob], file.name.replace(/\.pdf$/i, ".png"), {
+          type: "image/png",
+        });
+      }
+
+      const formData = new FormData();
+      formData.append("file", uploadFile);
+      formData.append("type", docType);
+
+      const res = await fetch(`/api/vehicles/${vehicleId}/documents/parse`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error ?? "Parse failed");
+      }
+
+      const result: ParseResult = await res.json();
+      setParseResult(result);
+
+      if (result.extractedExpiryDate) {
+        setExpiryDate(result.extractedExpiryDate);
+        setScreen("confirm");
+      } else {
+        // No date extracted — fall through to manual entry
+        if (onManualEntry) {
+          onManualEntry();
+        } else {
+          // Fallback: show confirm screen with empty date for manual input
+          setScreen("confirm");
+        }
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Upload failed. Please try again.");
+      if (fileInputRef.current) fileInputRef.current.value = ""; // MF-2
+      setScreen("upload");
+    }
+  }
+
+  async function handleSave() {
+    if (!docType || !parseResult) return;
+    setSaving(true);
+    setError(null);
+
+    try {
+      const res = await fetch(`/api/vehicles/${vehicleId}/documents`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: docType,
+          label: docType === "Other" ? label : undefined,
+          expiryDate: expiryDate || undefined,
+          parseStatus: expiryDate
+            ? parseResult.extractedExpiryDate
+              ? "parsed"
+              : "manual"
+            : "incomplete",
+          tempR2Key: parseResult.tempR2Key,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error ?? "Save failed");
+      }
+
+      setScreen("saved"); // SF-1: Screen 4 — save confirmation
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Save failed. Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // ─── Screen 1: Upload ──────────────────────────────────────────────────────
+  if (screen === "upload") {
+    return (
+      <div className="flex flex-col gap-4 p-4 pb-8">
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-sm text-red-600">
+            {error}
+          </div>
+        )}
+
+        <DocTypeSelect value={docType} onChange={setDocType} />
+
+        {docType === "Other" && (
+          <input
+            type="text"
+            placeholder="Label (e.g. Fitness Certificate)"
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            className="border border-gray-300 rounded-lg px-3 py-2 text-sm w-full focus:outline-none focus:ring-2 focus:ring-orange-400"
+          />
+        )}
+
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center w-full hover:border-orange-400 transition-colors"
+        >
+          <Upload size={32} className="text-gray-400 mx-auto mb-2" />
+          <p className="text-sm text-gray-500">Tap to upload or take a photo</p>
+        </button>
+
+        <p className="text-xs text-gray-400 text-center">JPG, PNG or PDF · Max 10MB</p>
+
+        {/* SF-4: removed capture="environment" — allows both camera and gallery on mobile */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/jpeg,image/png,application/pdf"
+          className="hidden"
+          onChange={handleFileSelect}
+        />
+      </div>
+    );
+  }
+
+  // ─── Screen 2: Parsing loading state ──────────────────────────────────────
+  if (screen === "parsing") {
+    return (
+      <div className="flex flex-col items-center justify-center gap-4 py-16 px-8">
+        <motion.div
+          animate={{ rotate: 360 }}
+          transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
+        >
+          <Loader2 size={48} className="text-orange-500" />
+        </motion.div>
+        <p className="font-semibold text-gray-800">Reading your document...</p>
+        <p className="text-sm text-gray-500 text-center">
+          Our AI is extracting the expiry date. This takes a few seconds.
+        </p>
+      </div>
+    );
+  }
+
+  // ─── Screen 4: Save confirmation ──────────────────────────────────────────
+  if (screen === "saved") {
+    return (
+      <div className="flex flex-col items-center justify-center gap-4 py-16 px-8 text-center">
+        <div className="h-16 w-16 rounded-full bg-green-100 flex items-center justify-center">
+          <CheckCircle size={32} className="text-green-600" />
+        </div>
+        <p className="font-semibold text-gray-800 text-lg">Document saved!</p>
+        <p className="text-sm text-gray-500">
+          {expiryDate
+            ? `Expiry date set to ${expiryDate}.`
+            : "Document added without an expiry date."}
+        </p>
+        <button
+          onClick={onSuccess}
+          className="bg-orange-500 text-white w-full py-3 rounded-lg font-semibold mt-2"
+        >
+          Done
+        </button>
+      </div>
+    );
+  }
+
+  // ─── Screen 3: Confirmation ────────────────────────────────────────────────
+  return (
+    <div className="flex flex-col gap-4 p-4 pb-8">
+      {parseResult?.extractedExpiryDate && (
+        <div className="flex items-center gap-2 text-green-600 bg-green-50 rounded-lg px-3 py-2">
+          <CheckCircle size={16} />
+          <span className="text-sm font-medium">Date extracted successfully</span>
+        </div>
+      )}
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-sm text-red-600">
+          {error}
+        </div>
+      )}
+
+      <div className="flex flex-col gap-1">
+        <label className="text-sm font-medium text-gray-700">Expiry Date</label>
+        <input
+          type="date"
+          value={expiryDate}
+          onChange={(e) => setExpiryDate(e.target.value)}
+          className="border border-gray-300 rounded-lg px-3 py-2 text-sm w-full focus:outline-none focus:ring-2 focus:ring-orange-400"
+        />
+      </div>
+
+      <p className="text-xs text-gray-400">
+        {storagePreference === "parse_only"
+          ? "Your document will not be stored — only the expiry date is saved."
+          : "Your document will be stored securely in encrypted storage."}
+      </p>
+
+      <button
+        onClick={handleSave}
+        disabled={saving}
+        className="bg-orange-500 text-white w-full py-3 rounded-lg font-semibold disabled:opacity-50"
+      >
+        {saving ? "Saving..." : "Save Document"}
+      </button>
+
+      {onManualEntry && (
+        <button
+          onClick={onManualEntry}
+          className="text-gray-500 text-sm underline text-center"
+        >
+          Enter date manually instead
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ─── DocTypeSelect ─────────────────────────────────────────────────────────────
+// Using a plain <select> for simplicity (Radix Select needs styling wrappers)
+
+interface DocTypeSelectProps {
+  value: DocumentType | "";
+  onChange: (v: DocumentType) => void;
+}
+
+function DocTypeSelect({ value, onChange }: DocTypeSelectProps) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value as DocumentType)}
+      className="border border-gray-300 rounded-lg px-3 py-2 text-sm w-full bg-white focus:outline-none focus:ring-2 focus:ring-orange-400 text-gray-700"
+    >
+      <option value="" disabled>
+        Document type
+      </option>
+      <option value="RC">RC (Registration Certificate)</option>
+      <option value="Insurance">Insurance</option>
+      <option value="PUC">PUC (Pollution Certificate)</option>
+      <option value="DL">DL (Driver&apos;s License)</option>
+      <option value="Other">Other</option>
+    </select>
+  );
+}

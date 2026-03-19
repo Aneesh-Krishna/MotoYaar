@@ -10,14 +10,19 @@ const anthropic = new Anthropic({
 
 /**
  * Parse a vehicle document image to extract the expiry date.
+ * Accepts an ArrayBuffer (from multipart form data) and converts to base64 internally.
  * Returns null if parsing fails — never throws.
  * Server-side only.
  */
 export async function parseDocument(
-  imageBase64: string,
-  mimeType: "image/jpeg" | "image/png" | "application/pdf"
-): Promise<{ expiryDate: string | null }> {
+  fileBuffer: ArrayBuffer,
+  mimeType: string
+): Promise<{ expiryDate: string | null; confidence: "high" | "medium" | "low" | "none" }> {
   try {
+    const base64 = Buffer.from(fileBuffer).toString("base64");
+    const imageMediaType: "image/jpeg" | "image/png" =
+      mimeType.includes("png") ? "image/png" : "image/jpeg";
+
     const response = await anthropic.messages.create({
       model: "claude-opus-4-6",
       max_tokens: 256,
@@ -29,17 +34,17 @@ export async function parseDocument(
               type: "image",
               source: {
                 type: "base64",
-                media_type: mimeType === "application/pdf" ? "image/jpeg" : mimeType,
-                data: imageBase64,
+                media_type: imageMediaType,
+                data: base64,
               },
             },
             {
               type: "text",
               text: `This is an Indian vehicle document (RC, Insurance, PUC, or Driver's License).
-Extract the expiry date.
-Respond with ONLY a JSON object in this exact format: {"expiryDate": "YYYY-MM-DD"}
-If no expiry date is found or the image is unreadable, respond with: {"expiryDate": null}
-Do not include any other text.`,
+Extract ONLY the expiry date or validity date.
+Return JSON: { "expiryDate": "YYYY-MM-DD" or null, "confidence": "high" | "medium" | "low" | "none" }
+If no expiry date is found, return null for expiryDate and "none" for confidence.
+Return ONLY valid JSON — no markdown, no explanation.`,
             },
           ],
         },
@@ -47,12 +52,15 @@ Do not include any other text.`,
     });
 
     const content = response.content[0];
-    if (content.type !== "text") return { expiryDate: null };
+    if (content.type !== "text") return { expiryDate: null, confidence: "none" };
 
     const parsed = JSON.parse(content.text.trim());
-    return { expiryDate: parsed.expiryDate ?? null };
+    return {
+      expiryDate: parsed.expiryDate ?? null,
+      confidence: parsed.confidence ?? "none",
+    };
   } catch {
-    return { expiryDate: null };
+    return { expiryDate: null, confidence: "none" };
   }
 }
 

@@ -349,10 +349,10 @@ function Step5({ onNext }: { onNext: () => void }) {
   return (
     <div className="flex flex-col items-center gap-4 py-8 text-center">
       <FileText size={48} className="text-gray-300" />
-      <h3 className="font-semibold text-lg">Add Documents Later</h3>
+      <h3 className="font-semibold text-lg">Documents</h3>
       <p className="text-sm text-gray-500">
-        You can upload your RC, Insurance, and PUC after saving the vehicle.
-        We&apos;ll remind you from the vehicle detail page.
+        Save your vehicle first, then add your RC, Insurance, and PUC.
+        You&apos;ll land on the Documents tab right after saving.
       </p>
       <button
         onClick={onNext}
@@ -543,7 +543,8 @@ export function AddVehicleWizard() {
         imageKey: wizardData.imageKey || undefined,
       };
       const vehicle = await createVehicle(payload);
-      router.push(`/garage/${vehicle.id}`);
+      // Open the documents tab directly so user can add documents immediately
+      router.push(`/garage/${vehicle.id}?tab=documents`);
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
         setConflictError("You already have a vehicle with this registration number");
