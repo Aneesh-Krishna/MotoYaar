@@ -1,2 +1,6 @@
-// TODO: Implement in Story 4.x — Document Management
-export {};
+export const documentService = {
+  /** Stub: returns null until Epic 04 implements document management. */
+  async nextExpiry(_vehicleId: string): Promise<string | null> {
+    return null;
+  },
+};
