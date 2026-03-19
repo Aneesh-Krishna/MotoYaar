@@ -1,12 +1,12 @@
 import { db } from "@/lib/db/client";
-import { documents, users } from "@/lib/db/schema";
-import { eq, asc } from "drizzle-orm";
+import { documents, users, vehicles } from "@/lib/db/schema";
+import { eq, asc, isNull, and } from "drizzle-orm";
 import { storageService } from "@/services/storageService";
 import { vehicleService } from "@/services/vehicleService";
 import { logger } from "@/lib/logger";
-import { ForbiddenError } from "@/lib/errors";
+import { ForbiddenError, NotFoundError } from "@/lib/errors";
 import type { Document, DocumentStatus } from "@/types";
-import type { CreateDocumentInput } from "@/lib/validations/document";
+import type { CreateDocumentInput, UpdateDocumentInput } from "@/lib/validations/document";
 
 /**
  * Derive document status from expiry date and user's notification window.
@@ -129,5 +129,128 @@ export const documentService = {
       .returning();
 
     return mapRow(doc);
+  },
+
+  async update(docId: string, userId: string, data: UpdateDocumentInput): Promise<Document> {
+    const doc = await db.query.documents.findFirst({ where: eq(documents.id, docId) });
+    if (!doc) throw new NotFoundError("Document not found");
+
+    if (doc.vehicleId) {
+      const vehicle = await db.query.vehicles.findFirst({ where: eq(vehicles.id, doc.vehicleId) });
+      if (!vehicle || vehicle.userId !== userId) {
+        throw new ForbiddenError("Only the vehicle owner can edit this document");
+      }
+    } else {
+      if (doc.userId !== userId) {
+        throw new ForbiddenError("Only the document owner can edit it");
+      }
+    }
+
+    const user = await db.query.users.findFirst({ where: eq(users.id, userId) });
+    const effectiveExpiryDate = data.expiryDate !== undefined ? data.expiryDate : doc.expiryDate;
+    const newStatus = computeDocumentStatus(
+      effectiveExpiryDate,
+      user?.notificationWindowDays ?? 30
+    );
+
+    const [updated] = await db
+      .update(documents)
+      .set({
+        type: data.type ?? doc.type,
+        label: data.label ?? doc.label,
+        expiryDate: effectiveExpiryDate,
+        parseStatus: effectiveExpiryDate ? "manual" : "incomplete",
+        status: newStatus,
+      })
+      .where(eq(documents.id, docId))
+      .returning();
+
+    return mapRow(updated);
+  },
+
+  async createUserDocument(userId: string, data: CreateDocumentInput): Promise<Document> {
+    // Security: validate tempR2Key belongs to this user's temp namespace
+    if (data.tempR2Key && !data.tempR2Key.startsWith(`${userId}/documents/temp/`)) {
+      throw new ForbiddenError("Invalid file reference");
+    }
+
+    const user = await db.query.users.findFirst({ where: eq(users.id, userId) });
+    const pref = user?.documentStoragePreference ?? "parse_only";
+    const notificationWindowDays = user?.notificationWindowDays ?? 30;
+
+    let storageUrl: string | null = null;
+    let storageKey: string | null = null;
+
+    if (data.tempR2Key) {
+      if (pref === "full_storage") {
+        const ext = data.tempR2Key.endsWith(".png") ? "png" : "jpg";
+        const permanentKey = `${userId}/documents/dl/${crypto.randomUUID()}.${ext}`;
+        await storageService.copyFile(data.tempR2Key, permanentKey);
+        await storageService.deleteFile(data.tempR2Key).catch((e) =>
+          logger.error({ error: e }, "Failed to delete DL temp R2 file after copy")
+        );
+        storageUrl = permanentKey;
+        storageKey = permanentKey;
+      } else {
+        await storageService.deleteFile(data.tempR2Key).catch((e) =>
+          logger.error({ error: e }, "Failed to delete DL temp R2 file after parse")
+        );
+      }
+    }
+
+    const status = computeDocumentStatus(data.expiryDate, notificationWindowDays);
+
+    const [doc] = await db
+      .insert(documents)
+      .values({
+        vehicleId: null,
+        userId,
+        type: "DL",
+        label: data.label,
+        expiryDate: data.expiryDate ?? null,
+        storageUrl,
+        storageKey,
+        parseStatus: data.parseStatus,
+        status,
+      })
+      .returning();
+
+    return mapRow(doc);
+  },
+
+  async listUserDocuments(userId: string): Promise<Document[]> {
+    const user = await db.query.users.findFirst({ where: eq(users.id, userId) });
+    const windowDays = user?.notificationWindowDays ?? 30;
+
+    const docs = await db.query.documents.findMany({
+      where: and(eq(documents.userId, userId), isNull(documents.vehicleId)),
+    });
+
+    return docs.map((doc) => ({
+      ...mapRow(doc),
+      status: computeDocumentStatus(doc.expiryDate ?? null, windowDays),
+    }));
+  },
+
+  async delete(docId: string, userId: string): Promise<void> {
+    const doc = await db.query.documents.findFirst({ where: eq(documents.id, docId) });
+    if (!doc) throw new NotFoundError("Document not found");
+
+    if (doc.vehicleId) {
+      const vehicle = await db.query.vehicles.findFirst({ where: eq(vehicles.id, doc.vehicleId) });
+      if (!vehicle || vehicle.userId !== userId) {
+        throw new ForbiddenError("Only the vehicle owner can delete this document");
+      }
+    } else {
+      if (doc.userId !== userId) throw new ForbiddenError("Only the document owner can delete it");
+    }
+
+    if (doc.storageKey) {
+      await storageService.deleteFile(doc.storageKey).catch((e) =>
+        logger.error({ error: e, docId }, "Failed to delete document R2 file")
+      );
+    }
+
+    await db.delete(documents).where(eq(documents.id, docId));
   },
 };
