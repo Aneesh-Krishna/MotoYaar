@@ -8,7 +8,10 @@ export const createVehicleSchema = z.object({
   variant: z.string().optional(),
   color: z.string().optional(),
   registrationNumber: z.string().min(1, "Registration number is required"),
-  purchasedAt: z.string().optional(), // ISO date string YYYY-MM-DD
+  purchasedAt: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Purchase date must be in YYYY-MM-DD format")
+    .optional(), // ISO date string YYYY-MM-DD
   previousOwners: z.number().int().min(0).default(0),
   imageUrl: z.string().url().optional(),
   imageKey: z.string().optional(),

@@ -27,17 +27,18 @@ const BUCKET = process.env.R2_BUCKET_NAME!;
  * deleted from R2 in that job. No native R2 lifecycle rule is used for MVP.
  */
 
-/** Generate a pre-signed PUT URL for client-side upload (expires in 60s) */
+/** Generate a pre-signed PUT URL for client-side upload (default expires in 60s) */
 export async function generateUploadUrl(
   key: string,
-  contentType: string
+  contentType: string,
+  expiresIn = 60
 ): Promise<string> {
   const command = new PutObjectCommand({
     Bucket: BUCKET,
     Key: key,
     ContentType: contentType,
   });
-  return getSignedUrl(r2, command, { expiresIn: 60 });
+  return getSignedUrl(r2, command, { expiresIn });
 }
 
 /** Generate a pre-signed GET URL for private document access (15-min TTL) */

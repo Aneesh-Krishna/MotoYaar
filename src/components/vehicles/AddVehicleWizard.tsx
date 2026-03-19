@@ -294,11 +294,12 @@ function Step4({
       if (!res.ok) throw new Error("Failed to get upload URL");
       const { uploadUrl, key, publicUrl } = await res.json();
 
-      await fetch(uploadUrl, {
+      const putRes = await fetch(uploadUrl, {
         method: "PUT",
         headers: { "Content-Type": file.type },
         body: file,
       });
+      if (!putRes.ok) throw new Error(`R2 upload failed: ${putRes.status}`);
 
       onImageUploaded(publicUrl, key);
     } catch {
@@ -374,7 +375,7 @@ function Step6({
 }: {
   data: WizardData;
   onEdit: (step: number) => void;
-  onSave: () => void;
+  onSave: () => Promise<void>;
   conflictError: string | null;
 }) {
   const [saving, setSaving] = useState(false);

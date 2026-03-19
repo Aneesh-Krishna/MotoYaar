@@ -12,4 +12,14 @@ export const expenseService = {
   async recentByUser(_userId: string, _limit: number): Promise<RecentActivity[]> {
     return [];
   },
+
+  /** Stub: returns 0 until Epic 05 implements expense tracking. */
+  async sumByVehicle(_vehicleId: string): Promise<number> {
+    return 0;
+  },
+
+  /** Stub: returns null until Epic 05 implements expense tracking. */
+  async lastServiceDate(_vehicleId: string): Promise<string | null> {
+    return null;
+  },
 };

@@ -4,8 +4,10 @@ import userEvent from "@testing-library/user-event";
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
+const mockRouterPush = vi.fn();
+
 vi.mock("next/navigation", () => ({
-  useRouter: vi.fn(() => ({ push: vi.fn() })),
+  useRouter: vi.fn(() => ({ push: mockRouterPush })),
 }));
 
 vi.mock("next/image", () => ({
@@ -26,6 +28,9 @@ vi.mock("@/services/api/vehicleApi", () => ({
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 import { AddVehicleWizard } from "@/components/vehicles/AddVehicleWizard";
+import { ApiError } from "@/lib/api-client";
+import * as vehicleApi from "@/services/api/vehicleApi";
+import { toast } from "sonner";
 
 describe("AddVehicleWizard", () => {
   beforeEach(() => {
@@ -118,4 +123,94 @@ describe("AddVehicleWizard", () => {
       expect(screen.getByText("Step 1 of 6")).toBeInTheDocument();
     });
   });
+
+  it("shows 409 conflict error inline on review step when reg number is duplicate", async () => {
+    vi.mocked(vehicleApi.createVehicle).mockRejectedValueOnce(
+      new ApiError("CONFLICT", "You already have a vehicle with this registration number", undefined, 409)
+    );
+
+    const user = userEvent.setup();
+    render(<AddVehicleWizard />);
+
+    await navigateToReviewStep(user, "My Bike", "MH12AB1234");
+
+    await user.click(screen.getByRole("button", { name: /save vehicle/i }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByText("You already have a vehicle with this registration number")
+      ).toBeInTheDocument();
+    });
+  });
+
+  it("redirects to /garage/[id] on successful save", async () => {
+    vi.mocked(vehicleApi.createVehicle).mockResolvedValueOnce({
+      id: "abc-123",
+      userId: "user-1",
+      name: "My Bike",
+      type: "2-wheeler",
+      registrationNumber: "MH12AB1234",
+      previousOwners: 0,
+      createdAt: new Date().toISOString(),
+    });
+
+    const user = userEvent.setup();
+    render(<AddVehicleWizard />);
+
+    await navigateToReviewStep(user, "My Bike", "MH12AB1234");
+
+    await user.click(screen.getByRole("button", { name: /save vehicle/i }));
+
+    await waitFor(() => {
+      expect(mockRouterPush).toHaveBeenCalledWith("/garage/abc-123");
+    });
+  });
+
+  it("shows toast on network error during save", async () => {
+    vi.mocked(vehicleApi.createVehicle).mockRejectedValueOnce(new Error("Network error"));
+
+    const user = userEvent.setup();
+    render(<AddVehicleWizard />);
+
+    await navigateToReviewStep(user, "My Bike", "MH12AB1234");
+
+    await user.click(screen.getByRole("button", { name: /save vehicle/i }));
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith("Failed to save vehicle. Try again.");
+    });
+  });
 });
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+async function navigateToReviewStep(
+  user: ReturnType<typeof userEvent.setup>,
+  name: string,
+  regNumber: string
+) {
+  // Step 1
+  await user.type(screen.getByPlaceholderText("e.g. Royal Enfield Classic 350"), name);
+  await user.selectOptions(screen.getByRole("combobox"), "2-wheeler");
+  await user.click(screen.getByRole("button", { name: /next/i }));
+
+  // Step 2
+  await waitFor(() => screen.getByPlaceholderText("e.g. MH12AB1234"));
+  await user.type(screen.getByPlaceholderText("e.g. MH12AB1234"), regNumber);
+  await user.click(screen.getByRole("button", { name: /next/i }));
+
+  // Step 3
+  await waitFor(() => screen.getByText("Step 3 of 6"));
+  await user.click(screen.getByRole("button", { name: /next/i }));
+
+  // Step 4 - skip
+  await waitFor(() => screen.getByText("Step 4 of 6"));
+  await user.click(screen.getByRole("button", { name: /skip/i }));
+
+  // Step 5 - skip
+  await waitFor(() => screen.getByText("Step 5 of 6"));
+  await user.click(screen.getByRole("button", { name: /skip for now/i }));
+
+  // Step 6
+  await waitFor(() => screen.getByText("Step 6 of 6"));
+}
