@@ -37,6 +37,7 @@ function mapRow(row: typeof documents.$inferSelect): Document {
     label: row.label ?? undefined,
     expiryDate: row.expiryDate ?? undefined,
     storageUrl: row.storageUrl ?? undefined,
+    storageKey: row.storageKey ?? undefined,
     parseStatus: row.parseStatus as Document["parseStatus"],
     status: row.status as Document["status"],
     createdAt:
@@ -89,6 +90,7 @@ export const documentService = {
     const notificationWindowDays = user?.notificationWindowDays ?? 30;
 
     let storageUrl: string | null = null;
+    let storageKey: string | null = null;
 
     if (data.tempR2Key) {
       if (pref === "full_storage") {
@@ -99,7 +101,8 @@ export const documentService = {
         await storageService.deleteFile(data.tempR2Key).catch((e) =>
           logger.error({ error: e }, "Failed to delete temp R2 file after copy")
         );
-        storageUrl = permanentKey; // store R2 key; generate signed URL on access
+        storageUrl = permanentKey; // non-null = "file is stored" indicator
+        storageKey = permanentKey; // R2 object key used for signing and cron deletion
       } else {
         // parse_only: delete temp file after parsing
         await storageService.deleteFile(data.tempR2Key).catch((e) =>
@@ -119,6 +122,7 @@ export const documentService = {
         label: data.label,
         expiryDate: data.expiryDate ?? null,
         storageUrl,
+        storageKey,
         parseStatus: data.parseStatus,
         status,
       })

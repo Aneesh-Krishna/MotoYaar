@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import Link from "next/link";
 import type { DocumentType } from "@/types";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
@@ -392,8 +393,11 @@ export function DocumentUpload({
 
       <p className="text-xs text-gray-400">
         {storagePreference === "parse_only"
-          ? "Your document will not be stored — only the expiry date is saved."
-          : "Your document will be stored securely in encrypted storage."}
+          ? "Your document will not be stored — only the expiry date is saved. "
+          : "Your document will be stored securely. It auto-deletes 10 days after expiry. "}
+        <Link href="/profile/settings" className="underline">
+          Change in Settings
+        </Link>
       </p>
 
       <button

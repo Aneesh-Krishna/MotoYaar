@@ -42,10 +42,10 @@ export async function generateUploadUrl(
   return getSignedUrl(r2, command, { expiresIn });
 }
 
-/** Generate a pre-signed GET URL for private document access (15-min TTL) */
-export async function generateAccessUrl(key: string): Promise<string> {
+/** Generate a pre-signed GET URL for private document access (default 15-min TTL) */
+export async function generateAccessUrl(key: string, expiresInSeconds = 900): Promise<string> {
   const command = new GetObjectCommand({ Bucket: BUCKET, Key: key });
-  return getSignedUrl(r2, command, { expiresIn: 900 }); // 15 minutes
+  return getSignedUrl(r2, command, { expiresIn: expiresInSeconds });
 }
 
 /** Delete an object from R2 */

@@ -129,4 +129,28 @@ describe("DocumentRow", () => {
     await user.click(screen.getByText("Delete"));
     expect(onDelete).toHaveBeenCalledWith("doc-1");
   });
+
+  it("shows 'Stored' badge when storageUrl is set", () => {
+    render(
+      <DocumentRow
+        document={makeDocument({ storageUrl: "user-1/documents/vehicle-1/file.jpg" })}
+        storagePreference="full_storage"
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+      />
+    );
+    expect(screen.getByText("Stored")).toBeInTheDocument();
+  });
+
+  it("shows 'Parsed only' badge when storageUrl is not set", () => {
+    render(
+      <DocumentRow
+        document={makeDocument({ storageUrl: undefined })}
+        storagePreference="parse_only"
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+      />
+    );
+    expect(screen.getByText("Parsed only")).toBeInTheDocument();
+  });
 });

@@ -1,7 +1,7 @@
 "use client";
 
 import { format } from "date-fns";
-import { FileText, Shield, Wind, CreditCard, File, MoreVertical } from "lucide-react";
+import { FileText, Shield, Wind, CreditCard, File, MoreVertical, Cloud } from "lucide-react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import type { Document, DocumentType } from "@/types";
@@ -59,6 +59,16 @@ export function DocumentRow({
           <StatusBadge status={document.status} />
         </div>
         <p className="text-xs text-gray-500 mt-0.5">{formattedExpiry}</p>
+        <div className="mt-1">
+          {document.storageUrl ? (
+            <span className="inline-flex items-center gap-1 text-xs text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">
+              <Cloud size={10} />
+              Stored
+            </span>
+          ) : (
+            <span className="text-xs text-gray-400">Parsed only</span>
+          )}
+        </div>
       </div>
 
       {/* Kebab menu */}
