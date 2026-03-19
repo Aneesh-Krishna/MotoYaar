@@ -6,7 +6,10 @@ import { FileText, Plus } from "lucide-react";
 import { DocumentRow } from "@/components/documents/DocumentRow";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { DocumentUpload } from "@/components/documents/DocumentUpload";
-import { getSignedUrl } from "@/services/api/documentApi";
+import { DocumentEditForm } from "@/components/documents/DocumentEditForm";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
+import { getSignedUrl, deleteDocument } from "@/services/api/documentApi";
+import { toast } from "sonner";
 import type { Document } from "@/types";
 
 interface DocumentsTabProps {
@@ -18,18 +21,36 @@ interface DocumentsTabProps {
 export function DocumentsTab({ vehicleId, documents, storagePreference }: DocumentsTabProps) {
   const router = useRouter();
   const [showUploadSheet, setShowUploadSheet] = useState(false);
+  const [editingDoc, setEditingDoc] = useState<Document | null>(null);
+  const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const handleView = async (docId: string) => {
     const { signedUrl } = await getSignedUrl(docId);
     window.open(signedUrl, "_blank");
   };
 
-  const handleEdit = (_id: string) => {
-    // Story 4.4 will implement edit flow
+  const handleEdit = (id: string) => {
+    const doc = documents.find((d) => d.id === id);
+    if (doc) setEditingDoc(doc);
   };
 
-  const handleDelete = (_id: string) => {
-    // Story 4.4 will implement delete flow
+  const handleDelete = (id: string) => {
+    setDeletingDocId(id);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deletingDocId) return;
+    setIsDeleting(true);
+    try {
+      await deleteDocument(deletingDocId);
+      setDeletingDocId(null);
+      router.refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete document");
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   return (
@@ -88,6 +109,36 @@ export function DocumentsTab({ vehicleId, documents, storagePreference }: Docume
           }}
         />
       </BottomSheet>
+
+      <BottomSheet
+        open={!!editingDoc}
+        onClose={() => setEditingDoc(null)}
+        title="Edit Document"
+      >
+        {editingDoc && (
+          <DocumentEditForm
+            document={editingDoc}
+            vehicleId={vehicleId}
+            storagePreference={storagePreference}
+            onSaved={() => {
+              setEditingDoc(null);
+              router.refresh();
+            }}
+            onCancel={() => setEditingDoc(null)}
+          />
+        )}
+      </BottomSheet>
+
+      <ConfirmModal
+        open={!!deletingDocId}
+        onClose={() => setDeletingDocId(null)}
+        onConfirm={handleDeleteConfirm}
+        title="Remove this document?"
+        description="This will permanently remove the document record. This cannot be undone."
+        confirmLabel="Remove Document"
+        isDestructive={true}
+        isLoading={isDeleting}
+      />
     </>
   );
 }

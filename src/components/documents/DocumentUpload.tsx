@@ -25,19 +25,21 @@ interface ParseResult {
 }
 
 interface DocumentUploadProps {
-  vehicleId: string;
+  vehicleId?: string;
+  mode?: "vehicle" | "dl";
   storagePreference: "parse_only" | "full_storage";
   onSuccess: () => void;
 }
 
 export function DocumentUpload({
   vehicleId,
+  mode = "vehicle",
   storagePreference,
   onSuccess,
 }: DocumentUploadProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [screen, setScreen] = useState<UploadScreen>("upload");
-  const [docType, setDocType] = useState<DocumentType | "">("");
+  const [docType, setDocType] = useState<DocumentType | "">(mode === "dl" ? "DL" : "");
   const [label, setLabel] = useState("");
   const [expiryDate, setExpiryDate] = useState("");
   const [parseResult, setParseResult] = useState<ParseResult | null>(null);
@@ -65,7 +67,7 @@ export function DocumentUpload({
       if (fileInputRef.current) fileInputRef.current.value = ""; // MF-2
       return;
     }
-    if (!docType) {
+    if (mode === "vehicle" && !docType) {
       setError("Please select a document type first.");
       if (fileInputRef.current) fileInputRef.current.value = ""; // MF-2
       return;
@@ -87,9 +89,14 @@ export function DocumentUpload({
 
       const formData = new FormData();
       formData.append("file", uploadFile);
-      formData.append("type", docType);
+      if (mode === "vehicle") formData.append("type", docType);
 
-      const res = await fetch(`/api/vehicles/${vehicleId}/documents/parse`, {
+      const parseEndpoint =
+        mode === "dl"
+          ? "/api/users/me/documents/parse"
+          : `/api/vehicles/${vehicleId}/documents/parse`;
+
+      const res = await fetch(parseEndpoint, {
         method: "POST",
         body: formData,
       });
@@ -121,8 +128,11 @@ export function DocumentUpload({
     setSaving(true);
     setError(null);
 
+    const saveEndpoint =
+      mode === "dl" ? "/api/users/me/documents" : `/api/vehicles/${vehicleId}/documents`;
+
     try {
-      const res = await fetch(`/api/vehicles/${vehicleId}/documents`, {
+      const res = await fetch(saveEndpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -155,8 +165,12 @@ export function DocumentUpload({
   async function handleManualSave() {
     if (!selectedDate || !docType) return;
     setSaving(true);
+
+    const saveEndpoint =
+      mode === "dl" ? "/api/users/me/documents" : `/api/vehicles/${vehicleId}/documents`;
+
     try {
-      const res = await fetch(`/api/vehicles/${vehicleId}/documents`, {
+      const res = await fetch(saveEndpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -186,8 +200,12 @@ export function DocumentUpload({
   async function handleSkip() {
     if (!docType) return;
     setSaving(true);
+
+    const saveEndpoint =
+      mode === "dl" ? "/api/users/me/documents" : `/api/vehicles/${vehicleId}/documents`;
+
     try {
-      const res = await fetch(`/api/vehicles/${vehicleId}/documents`, {
+      const res = await fetch(saveEndpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -223,16 +241,19 @@ export function DocumentUpload({
           </div>
         )}
 
-        <DocTypeSelect value={docType} onChange={setDocType} />
-
-        {docType === "Other" && (
-          <input
-            type="text"
-            placeholder="Label (e.g. Fitness Certificate)"
-            value={label}
-            onChange={(e) => setLabel(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm w-full focus:outline-none focus:ring-2 focus:ring-orange-400"
-          />
+        {mode === "vehicle" && (
+          <>
+            <DocTypeSelect value={docType} onChange={setDocType} />
+            {docType === "Other" && (
+              <input
+                type="text"
+                placeholder="Label (e.g. Fitness Certificate)"
+                value={label}
+                onChange={(e) => setLabel(e.target.value)}
+                className="border border-gray-300 rounded-lg px-3 py-2 text-sm w-full focus:outline-none focus:ring-2 focus:ring-orange-400"
+              />
+            )}
+          </>
         )}
 
         <button
