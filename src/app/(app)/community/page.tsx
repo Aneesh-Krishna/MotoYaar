@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { Search, Plus, Users } from "lucide-react";
-import { TopBar } from "@/components/layout/TopBar";
 import { PostCard } from "@/components/ui/PostCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { cn } from "@/lib/utils";
@@ -55,20 +54,6 @@ export default function CommunityPage() {
 
   return (
     <>
-      <TopBar
-        title="Community"
-        actions={
-          <Link
-            href="/community/search"
-            aria-label="Search posts"
-            className="flex items-center justify-center w-9 h-9 rounded-full text-foreground-muted hover:text-foreground hover:bg-gray-100 transition-colors"
-          >
-            <Search size={20} aria-hidden="true" />
-          </Link>
-        }
-        unreadCount={0}
-      />
-
       {/* Sort + Tag filters */}
       <div className="border-b border-border bg-card sticky top-14 z-20">
         {/* Sort chips */}

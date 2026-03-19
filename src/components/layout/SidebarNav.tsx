@@ -2,36 +2,31 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  Home,
-  Car,
-  Users,
-  MapPin,
-  User,
-} from "lucide-react";
+import { User } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-const NAV_ITEMS = [
-  { href: "/",          label: "Home",      Icon: Home    },
-  { href: "/garage",    label: "Garage",    Icon: Car     },
-  { href: "/community", label: "Community", Icon: Users   },
-  { href: "/trips",     label: "Trips",     Icon: MapPin  },
-  { href: "/profile",   label: "Profile",   Icon: User    },
-] as const;
+import { NAV_TABS } from "@/config/nav";
 
 export function SidebarNav() {
   const pathname = usePathname();
 
   return (
-    <aside className="hidden lg:flex flex-col w-60 shrink-0 border-r border-border bg-card h-screen sticky top-0">
+    <aside
+      className={cn(
+        "fixed top-0 left-0 h-full w-60 z-40",
+        "bg-white border-r border-gray-200",
+        "hidden lg:flex flex-col"
+      )}
+    >
       {/* Logo */}
-      <div className="flex items-center gap-2 px-6 py-5 border-b border-border">
-        <span className="text-primary font-bold text-xl tracking-tight">MotoYaar</span>
+      <div className="flex items-center gap-2 px-6 py-5 border-b border-gray-200">
+        <span className="text-orange-500 font-bold text-xl tracking-tight">
+          MotoYaar
+        </span>
       </div>
 
       {/* Nav links */}
       <nav aria-label="Sidebar navigation" className="flex-1 px-3 py-4 space-y-1">
-        {NAV_ITEMS.map(({ href, label, Icon }) => {
+        {NAV_TABS.map(({ href, label, Icon }) => {
           const isActive =
             href === "/" ? pathname === "/" : pathname.startsWith(href);
 
@@ -40,11 +35,12 @@ export function SidebarNav() {
               key={href}
               href={href}
               className={cn(
-                "flex items-center gap-3 rounded-btn px-3 py-2.5",
+                "flex items-center gap-3 rounded-md px-3 py-2.5",
                 "text-sm font-medium transition-colors",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500",
                 isActive
-                  ? "bg-primary/10 text-primary"
-                  : "text-foreground-muted hover:bg-gray-100 hover:text-foreground"
+                  ? "border-l-4 border-orange-500 bg-orange-50 text-orange-600"
+                  : "text-gray-500 hover:bg-gray-100 hover:text-gray-900"
               )}
               aria-current={isActive ? "page" : undefined}
             >
@@ -58,6 +54,16 @@ export function SidebarNav() {
           );
         })}
       </nav>
+
+      {/* User avatar stub */}
+      <div className="flex items-center gap-3 px-4 py-4 border-t border-gray-200">
+        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100">
+          <User size={16} className="text-gray-500" aria-hidden="true" />
+        </div>
+        <span className="text-sm font-medium text-gray-700 truncate">
+          My Profile
+        </span>
+      </div>
     </aside>
   );
 }

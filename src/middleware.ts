@@ -8,7 +8,7 @@ export default withAuth(
 
     // New user without username → redirect to onboarding
     // Exempt all /onboarding/* routes (covers /onboarding and /onboarding/walkthrough)
-    if (token && !token.username && !pathname.startsWith("/onboarding")) {
+    if (token && !token.username && !pathname.startsWith("/onboarding") && !pathname.startsWith("/api/")) {
       return NextResponse.redirect(new URL("/onboarding", req.url));
     }
 

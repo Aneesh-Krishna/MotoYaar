@@ -15,6 +15,13 @@
       "when": 1773586713169,
       "tag": "0001_free_unicorn",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1773887900422,
+      "tag": "0002_melted_makkari",
+      "breakpoints": true
     }
   ]
 }

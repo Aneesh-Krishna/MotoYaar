@@ -30,7 +30,7 @@ export const authOptions: NextAuthOptions = {
             .values({
               googleId: account.providerAccountId,
               name: user.name ?? user.email ?? "Unknown",
-              username: "", // set during onboarding (Story 2.2)
+              username: null, // set during onboarding (Story 2.2)
             })
             .onConflictDoNothing({ target: users.googleId });
         } catch (error) {
@@ -65,7 +65,7 @@ export const authOptions: NextAuthOptions = {
           where: eq(users.googleId, token.sub),
         });
         if (dbUser) {
-          token.username = dbUser.username;
+          token.username = dbUser.username ?? undefined;
           token.userId = dbUser.id;
           token.walkthroughSeen = dbUser.walkthroughSeen;
         }
