@@ -1,8 +1,7 @@
-import { getServerSession } from "next-auth";
+import { getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Plus, Car, IndianRupee } from "lucide-react";
-import { authOptions } from "@/lib/auth";
 import { vehicleService } from "@/services/vehicleService";
 import { expenseService } from "@/services/expenseService";
 import { VehicleCard } from "@/components/ui/VehicleCard";
@@ -172,7 +171,7 @@ function EmptyState() {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default async function DashboardPage() {
-  const session = await getServerSession(authOptions);
+  const session = await getSession();
   if (!session) redirect("/login");
 
   const [vehicles, recentActivities] = await Promise.all([

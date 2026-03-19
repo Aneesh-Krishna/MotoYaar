@@ -1,5 +1,4 @@
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { getSession } from "@/lib/session";
 import { NextResponse } from "next/server";
 import { vehicleService } from "@/services/vehicleService";
 import { storageService } from "@/services/storageService";
@@ -7,7 +6,7 @@ import { parseDocument } from "@/lib/anthropic";
 import { handleApiError } from "@/lib/errors";
 
 export async function POST(req: Request, { params }: { params: { id: string } }) {
-  const session = await getServerSession(authOptions);
+  const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {

@@ -537,6 +537,7 @@ export function AddVehicleWizard() {
       const vehicle = await createVehicle(payload);
       // Open the documents tab directly so user can add documents immediately
       router.push(`/garage/${vehicle.id}?tab=documents`);
+      router.refresh();
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
         setConflictError("You already have a vehicle with this registration number");

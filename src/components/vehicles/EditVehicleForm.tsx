@@ -87,6 +87,7 @@ export function EditVehicleForm({ vehicle }: { vehicle: Vehicle }) {
 
       await updateVehicle(vehicle.id, { ...data, imageUrl, imageKey });
       router.push(`/garage/${vehicle.id}`);
+      router.refresh();
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
         setRegConflictError("You already have a vehicle with this registration number");

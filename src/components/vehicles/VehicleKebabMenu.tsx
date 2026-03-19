@@ -25,6 +25,7 @@ export function VehicleKebabMenu({ vehicleId, isOwner }: Props) {
       await deleteVehicle(vehicleId);
       toast.success("Vehicle deleted");
       router.push("/garage");
+      router.refresh();
     } catch (error) {
       if (error instanceof ApiError) {
         toast.error(error.message);
