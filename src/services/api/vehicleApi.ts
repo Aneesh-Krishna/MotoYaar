@@ -19,3 +19,9 @@ export async function updateVehicle(id: string, data: UpdateVehicleInput): Promi
     body: JSON.stringify(data),
   });
 }
+
+export async function deleteVehicle(id: string): Promise<void> {
+  return apiRequest<void>(`/vehicles/${id}`, {
+    method: "DELETE",
+  });
+}

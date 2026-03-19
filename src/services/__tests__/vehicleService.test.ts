@@ -14,6 +14,10 @@ const mockUpdate = {
   returning: vi.fn(),
 };
 
+const mockDelete = {
+  where: vi.fn().mockResolvedValue(undefined),
+};
+
 vi.mock("@/lib/db/client", () => ({
   db: {
     query: {
@@ -22,16 +26,39 @@ vi.mock("@/lib/db/client", () => ({
       },
       vehicleAccess: {
         findFirst: vi.fn(),
+        findMany: vi.fn(),
+      },
+      documents: {
+        findMany: vi.fn(),
       },
     },
     insert: vi.fn(),
     update: vi.fn(),
+    delete: vi.fn(),
   },
+}));
+
+vi.mock("@/services/storageService", () => ({
+  storageService: {
+    deleteFile: vi.fn().mockResolvedValue(undefined),
+  },
+}));
+
+vi.mock("@/services/notificationService", () => ({
+  notificationService: {
+    create: vi.fn().mockResolvedValue(undefined),
+  },
+}));
+
+vi.mock("@/lib/logger", () => ({
+  logger: { info: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
 // ─── Imports (after mocks) ────────────────────────────────────────────────────
 
 import { db } from "@/lib/db/client";
+import { storageService } from "@/services/storageService";
+import { notificationService } from "@/services/notificationService";
 import { vehicleService } from "../vehicleService";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -308,5 +335,79 @@ describe("vehicleService.update", () => {
 
     const setCall = (mockUpdate.set as ReturnType<typeof vi.fn>).mock.calls[0][0];
     expect(setCall).not.toHaveProperty("imageKey");
+  });
+});
+
+describe("vehicleService.delete", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (db.delete as ReturnType<typeof vi.fn>).mockReturnValue(mockDelete);
+    (db.query.documents.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (db.query.vehicleAccess.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+  });
+
+  it("deletes vehicle for owner", async () => {
+    (db.query.vehicles.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(DB_VEHICLE_ROW);
+
+    await vehicleService.delete("vehicle-uuid-1", "user-1");
+
+    expect(db.delete).toHaveBeenCalled();
+    expect(mockDelete.where).toHaveBeenCalled();
+  });
+
+  it("throws ForbiddenError when non-owner attempts delete", async () => {
+    (db.query.vehicles.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(DB_VEHICLE_ROW);
+
+    await expect(
+      vehicleService.delete("vehicle-uuid-1", "other-user")
+    ).rejects.toThrow(ForbiddenError);
+  });
+
+  it("throws NotFoundError for non-existent vehicle", async () => {
+    (db.query.vehicles.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+
+    await expect(
+      vehicleService.delete("non-existent-id", "user-1")
+    ).rejects.toThrow(NotFoundError);
+  });
+
+  it("calls storageService.deleteFile for vehicle image", async () => {
+    const vehicleWithImage = { ...DB_VEHICLE_ROW, imageUrl: "https://cdn.example.com/img.jpg" };
+    (db.query.vehicles.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(vehicleWithImage);
+
+    await vehicleService.delete("vehicle-uuid-1", "user-1");
+
+    expect(storageService.deleteFile).toHaveBeenCalledWith("https://cdn.example.com/img.jpg");
+  });
+
+  it("calls storageService.deleteFile for each stored document", async () => {
+    (db.query.vehicles.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(DB_VEHICLE_ROW);
+    (db.query.documents.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "doc-1", storageUrl: "https://cdn.example.com/doc1.pdf" },
+      { id: "doc-2", storageUrl: "https://cdn.example.com/doc2.pdf" },
+    ]);
+
+    await vehicleService.delete("vehicle-uuid-1", "user-1");
+
+    expect(storageService.deleteFile).toHaveBeenCalledWith("https://cdn.example.com/doc1.pdf");
+    expect(storageService.deleteFile).toHaveBeenCalledWith("https://cdn.example.com/doc2.pdf");
+  });
+
+  it("notifies each viewer after deletion", async () => {
+    (db.query.vehicles.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(DB_VEHICLE_ROW);
+    (db.query.vehicleAccess.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "access-1", vehicleId: "vehicle-uuid-1", userId: "viewer-1", accessLevel: "view" },
+      { id: "access-2", vehicleId: "vehicle-uuid-1", userId: "viewer-2", accessLevel: "view" },
+    ]);
+
+    await vehicleService.delete("vehicle-uuid-1", "user-1");
+
+    expect(notificationService.create).toHaveBeenCalledTimes(2);
+    expect(notificationService.create).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: "viewer-1", type: "vehicle_removed" })
+    );
+    expect(notificationService.create).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: "viewer-2", type: "vehicle_removed" })
+    );
   });
 });

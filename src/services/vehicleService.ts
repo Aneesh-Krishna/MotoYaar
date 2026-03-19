@@ -3,6 +3,9 @@ import { vehicles, expenses, documents, vehicleAccess } from "@/lib/db/schema";
 import { eq, and, isNotNull, sql } from "drizzle-orm";
 import { getDocumentStatus } from "@/lib/utils";
 import { ConflictError, ForbiddenError, NotFoundError } from "@/lib/errors";
+import { storageService } from "@/services/storageService";
+import { notificationService } from "@/services/notificationService";
+import { logger } from "@/lib/logger";
 import type { Vehicle, DocumentStatus } from "@/types";
 import type { CreateVehicleInput, UpdateVehicleInput } from "@/lib/validations/vehicle";
 
@@ -221,6 +224,56 @@ export const vehicleService = {
           ? updated.createdAt.toISOString()
           : String(updated.createdAt),
     };
+  },
+
+  async delete(vehicleId: string, userId: string): Promise<void> {
+    // 1. Ownership check
+    const vehicle = await db.query.vehicles.findFirst({
+      where: eq(vehicles.id, vehicleId),
+    });
+    if (!vehicle) throw new NotFoundError("Vehicle not found");
+    if (vehicle.userId !== userId) throw new ForbiddenError("Only the vehicle owner can delete this vehicle");
+
+    // 2. Get all documents with stored R2 files before deleting
+    const storedDocs = await db.query.documents.findMany({
+      where: and(
+        eq(documents.vehicleId, vehicleId),
+        isNotNull(documents.storageUrl)
+      ),
+    });
+
+    // 3. Get all viewers (for notification)
+    const viewers = await db.query.vehicleAccess.findMany({
+      where: eq(vehicleAccess.vehicleId, vehicleId),
+    });
+
+    // 4. Delete vehicle — FK ON DELETE CASCADE handles child records
+    await db.delete(vehicles).where(eq(vehicles.id, vehicleId));
+
+    // 5. Delete R2 files (after DB delete — failures must not break the flow)
+    if (vehicle.imageUrl) {
+      await storageService.deleteFile(vehicle.imageUrl).catch((e) =>
+        logger.error({ error: e, vehicleId }, "Failed to delete vehicle image from R2")
+      );
+    }
+    for (const doc of storedDocs) {
+      if (doc.storageUrl) {
+        await storageService.deleteFile(doc.storageUrl).catch((e) =>
+          logger.error({ error: e, docId: doc.id }, "Failed to delete document from R2")
+        );
+      }
+    }
+
+    // 6. Notify viewers
+    for (const viewer of viewers) {
+      await notificationService.create({
+        userId: viewer.userId,
+        type: "vehicle_removed",
+        message: "A vehicle shared with you has been removed.",
+      }).catch((e) =>
+        logger.error({ error: e, viewerId: viewer.userId }, "Failed to send vehicle removal notification")
+      );
+    }
   },
 
   async create(userId: string, data: CreateVehicleInput): Promise<Vehicle> {

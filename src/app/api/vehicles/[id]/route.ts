@@ -34,7 +34,14 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   }
 }
 
-// TODO: Implement in Story 3.6
-export async function DELETE() {
-  return NextResponse.json({ error: "Not implemented" }, { status: 501 });
+export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+  const session = await getServerSession(authOptions);
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  try {
+    await vehicleService.delete(params.id, session.user.id);
+    return new NextResponse(null, { status: 204 });
+  } catch (error) {
+    return handleApiError(error);
+  }
 }
