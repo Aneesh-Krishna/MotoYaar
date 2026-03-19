@@ -28,11 +28,20 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const r2PublicUrl = process.env.R2_PUBLIC_URL;
+    if (!r2PublicUrl) {
+      console.error("[vehicle-image] R2_PUBLIC_URL env var is not set");
+      return NextResponse.json(
+        { error: { code: "CONFIGURATION_ERROR", message: "Storage is not configured" } },
+        { status: 500 }
+      );
+    }
+
     const ext = path.extname(String(filename ?? "upload")).slice(0, MAX_FILENAME_LENGTH) || ".jpg";
     const safeName = `${crypto.randomUUID()}${ext}`;
     const key = `${session.user.id}/vehicles/images/${safeName}`;
-    const uploadUrl = await generateUploadUrl(key, contentType);
-    const publicUrl = `${process.env.R2_PUBLIC_URL}/${key}`;
+    const uploadUrl = await generateUploadUrl(key, contentType, 300); // 5-minute TTL for potentially large images
+    const publicUrl = `${r2PublicUrl}/${key}`;
 
     return NextResponse.json({ uploadUrl, key, publicUrl });
   } catch (error) {
