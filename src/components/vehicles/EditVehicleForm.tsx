@@ -33,7 +33,7 @@ export function EditVehicleForm({ vehicle }: { vehicle: Vehicle }) {
     setValue,
     formState: { errors, isSubmitting },
   } = useForm<UpdateVehicleInput>({
-    resolver: zodResolver(editFormSchema),
+    resolver: zodResolver(editFormSchema) as any,
     defaultValues: {
       name: vehicle.name,
       type: vehicle.type,

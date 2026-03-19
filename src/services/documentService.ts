@@ -1,7 +1,8 @@
 import { db } from "@/lib/db/client";
 import { documents, users } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, asc } from "drizzle-orm";
 import { storageService } from "@/services/storageService";
+import { vehicleService } from "@/services/vehicleService";
 import { logger } from "@/lib/logger";
 import { ForbiddenError } from "@/lib/errors";
 import type { Document, DocumentStatus } from "@/types";
@@ -22,7 +23,7 @@ export function computeDocumentStatus(
   if (isNaN(expiry.getTime())) return "incomplete";
   expiry.setHours(0, 0, 0, 0);
   const daysUntilExpiry = Math.floor((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-  if (daysUntilExpiry < 0) return "expired";
+  if (daysUntilExpiry <= 0) return "expired";
   if (daysUntilExpiry <= notificationWindowDays) return "expiring";
   return "valid";
 }
@@ -47,6 +48,24 @@ export const documentService = {
   /** Stub: returns null until Epic 04 implements document management. */
   async nextExpiry(_vehicleId: string): Promise<string | null> {
     return null;
+  },
+
+  async listByVehicle(vehicleId: string, userId: string): Promise<Document[]> {
+    // Access check (owner or viewer)
+    await vehicleService.getWithAccessCheck(vehicleId, userId);
+
+    const user = await db.query.users.findFirst({ where: eq(users.id, userId) });
+    const windowDays = user?.notificationWindowDays ?? 30;
+
+    const docs = await db.query.documents.findMany({
+      where: eq(documents.vehicleId, vehicleId),
+      orderBy: [asc(documents.expiryDate)], // NULLs sort last in PostgreSQL ASC
+    });
+
+    return docs.map((doc) => ({
+      ...mapRow(doc),
+      status: computeDocumentStatus(doc.expiryDate ?? null, windowDays),
+    }));
   },
 
   /**

@@ -1,14 +1,12 @@
 "use client";
 
-import { useState } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { FileText, Receipt, Map } from "lucide-react";
+import { Receipt, Map } from "lucide-react";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { BottomSheet } from "@/components/ui/BottomSheet";
-import { DocumentUpload } from "@/components/documents/DocumentUpload";
+import { DocumentsTab } from "@/components/documents/DocumentsTab";
 import { formatINR, formatDate, getDocumentStatus } from "@/lib/utils";
-import type { Vehicle } from "@/types";
+import type { Vehicle, Document } from "@/types";
 
 interface Props {
   vehicle: Vehicle;
@@ -17,6 +15,7 @@ interface Props {
   lastService: string | null;
   nextExpiry: string | null;
   storagePreference: "parse_only" | "full_storage";
+  documents: Document[];
 }
 
 const TABS = [
@@ -33,11 +32,11 @@ export function VehicleDetailTabs({
   lastService,
   nextExpiry,
   storagePreference,
+  documents,
 }: Props) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [uploadOpen, setUploadOpen] = useState(false);
 
   const handleTabChange = (tabId: string) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -87,28 +86,11 @@ export function VehicleDetailTabs({
           />
         )}
         {activeTab === "documents" && (
-          <>
-            <PlaceholderTab
-              Icon={FileText}
-              message="No documents yet. Add your RC, Insurance, and PUC."
-              ctaLabel="Add document"
-              onCtaClick={() => setUploadOpen(true)}
-            />
-            <BottomSheet
-              open={uploadOpen}
-              onClose={() => setUploadOpen(false)}
-              title="Add Document"
-            >
-              <DocumentUpload
-                vehicleId={vehicle.id}
-                storagePreference={storagePreference}
-                onSuccess={() => {
-                  setUploadOpen(false);
-                  router.refresh();
-                }}
-              />
-            </BottomSheet>
-          </>
+          <DocumentsTab
+            vehicleId={vehicle.id}
+            documents={documents}
+            storagePreference={storagePreference}
+          />
         )}
         {activeTab === "expenses" && (
           <PlaceholderTab

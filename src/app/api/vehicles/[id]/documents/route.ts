@@ -13,9 +13,8 @@ export async function GET(
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
-    await vehicleService.getWithAccessCheck(params.id, session.user.id);
-    // Full implementation in Story 4.3
-    return NextResponse.json([]);
+    const docs = await documentService.listByVehicle(params.id, session.user.id);
+    return NextResponse.json(docs);
   } catch (error) {
     return handleApiError(error);
   }
