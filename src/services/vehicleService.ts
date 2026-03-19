@@ -2,7 +2,9 @@ import { db } from "@/lib/db/client";
 import { vehicles, expenses, documents } from "@/lib/db/schema";
 import { eq, and, isNotNull, sql } from "drizzle-orm";
 import { getDocumentStatus } from "@/lib/utils";
+import { ConflictError } from "@/lib/errors";
 import type { Vehicle, DocumentStatus } from "@/types";
+import type { CreateVehicleInput } from "@/lib/validations/vehicle";
 
 export const vehicleService = {
   /**
@@ -79,5 +81,51 @@ export const vehicleService = {
         nextDocumentStatus,
       };
     });
+  },
+
+  async create(userId: string, data: CreateVehicleInput): Promise<Vehicle> {
+    const regNumber = data.registrationNumber.toUpperCase();
+
+    // Duplicate registration number check
+    const existing = await db.query.vehicles.findFirst({
+      where: and(
+        eq(vehicles.userId, userId),
+        eq(vehicles.registrationNumber, regNumber)
+      ),
+    });
+    if (existing) {
+      throw new ConflictError("You already have a vehicle with this registration number");
+    }
+
+    // imageKey is not stored in DB — strip it before insert
+    const { imageKey: _imageKey, ...insertData } = data;
+
+    const [vehicle] = await db
+      .insert(vehicles)
+      .values({
+        userId,
+        ...insertData,
+        registrationNumber: regNumber,
+      })
+      .returning();
+
+    return {
+      id: vehicle.id,
+      userId: vehicle.userId,
+      name: vehicle.name,
+      type: vehicle.type as Vehicle["type"],
+      company: vehicle.company ?? undefined,
+      model: vehicle.model ?? undefined,
+      variant: vehicle.variant ?? undefined,
+      color: vehicle.color ?? undefined,
+      registrationNumber: vehicle.registrationNumber,
+      purchasedAt: vehicle.purchasedAt ?? undefined,
+      previousOwners: vehicle.previousOwners,
+      imageUrl: vehicle.imageUrl ?? undefined,
+      createdAt:
+        vehicle.createdAt instanceof Date
+          ? vehicle.createdAt.toISOString()
+          : String(vehicle.createdAt),
+    };
   },
 };

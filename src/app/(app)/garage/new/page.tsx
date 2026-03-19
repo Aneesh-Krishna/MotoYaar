@@ -1,4 +1,6 @@
-// TODO: Implement in Story 3.1 — Vehicle Management
+"use client";
+import { AddVehicleWizard } from "@/components/vehicles/AddVehicleWizard";
+
 export default function NewVehiclePage() {
-  return null;
+  return <AddVehicleWizard />;
 }
