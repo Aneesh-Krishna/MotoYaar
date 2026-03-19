@@ -20,7 +20,7 @@ export interface User {
   id: string;
   googleId: string;
   name: string;
-  username: string;
+  username: string | null;
   bio?: string;
   profileImageUrl?: string;
   instagramLink?: string;
@@ -163,6 +163,10 @@ export interface NavTab {
   label: string;
   icon: string; // Lucide icon name
 }
+
+// Expense row joined with vehicle name — used by expenseService.recentByUser()
+// kind discriminator required for trip vs expense icon in Epic 05
+export type RecentActivity = Expense & { vehicleName: string; kind: "expense" | "trip" };
 
 export interface SpendReport {
   vehicleId?: string;

@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { Plus, MapPin } from "lucide-react";
-import { TopBar } from "@/components/layout/TopBar";
 import { TripCard } from "@/components/ui/TripCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import type { Trip } from "@/types";
@@ -52,20 +51,6 @@ export default function TripsPage() {
 
   return (
     <>
-      <TopBar
-        title="Trips"
-        actions={
-          <Link
-            href="/trips/new"
-            className="flex items-center gap-1.5 bg-primary text-white rounded-btn px-3 py-1.5 text-caption font-semibold hover:bg-primary-dark transition-colors"
-            aria-label="Log a new trip"
-          >
-            <Plus size={14} aria-hidden="true" />
-            Log Trip
-          </Link>
-        }
-      />
-
       <div className="px-screen-x py-5 max-w-screen-xl mx-auto lg:px-screen-x-md">
         {isEmpty ? (
           <EmptyState

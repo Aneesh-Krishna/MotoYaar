@@ -2,22 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  Home,
-  Car,
-  Users,
-  MapPin,
-  User,
-} from "lucide-react";
 import { cn } from "@/lib/utils";
-
-const NAV_ITEMS = [
-  { href: "/",          label: "Home",      Icon: Home    },
-  { href: "/garage",    label: "Garage",    Icon: Car     },
-  { href: "/community", label: "Community", Icon: Users   },
-  { href: "/trips",     label: "Trips",     Icon: MapPin  },
-  { href: "/profile",   label: "Profile",   Icon: User    },
-] as const;
+import { NAV_TABS } from "@/config/nav";
 
 export function BottomNav() {
   const pathname = usePathname();
@@ -27,15 +13,14 @@ export function BottomNav() {
       role="tablist"
       aria-label="Main navigation"
       className={cn(
-        "fixed bottom-0 inset-x-0 z-40",
-        "bg-card shadow-nav pb-safe",
-        // Desktop: hidden (replaced by sidebar)
+        "fixed bottom-0 left-0 right-0 z-50",
+        "h-16 pb-safe",
+        "bg-white border-t border-gray-200",
         "lg:hidden"
       )}
-      style={{ height: "calc(4rem + env(safe-area-inset-bottom))" }}
     >
-      <ul className="flex h-16 items-stretch">
-        {NAV_ITEMS.map(({ href, label, Icon }) => {
+      <ul className="flex h-full items-stretch">
+        {NAV_TABS.map(({ href, label, Icon }) => {
           const isActive =
             href === "/" ? pathname === "/" : pathname.startsWith(href);
 
@@ -47,11 +32,10 @@ export function BottomNav() {
                 aria-selected={isActive}
                 aria-label={label}
                 className={cn(
-                  "flex h-full flex-col items-center justify-center gap-0.5",
-                  "text-foreground-muted transition-colors",
-                  // Minimum tap target 44×44px
-                  "min-h-[44px] min-w-[44px]",
-                  isActive && "text-primary"
+                  "flex h-full min-h-[44px] min-w-[44px] flex-col items-center justify-center gap-0.5",
+                  "transition-colors",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500",
+                  isActive ? "text-orange-500" : "text-gray-500"
                 )}
               >
                 <Icon
@@ -59,12 +43,7 @@ export function BottomNav() {
                   strokeWidth={isActive ? 2.5 : 1.75}
                   aria-hidden="true"
                 />
-                <span
-                  className={cn(
-                    "text-[0.625rem] font-medium leading-none",
-                    isActive ? "text-primary" : "text-foreground-muted"
-                  )}
-                >
+                <span className="text-[0.625rem] font-medium leading-none">
                   {label}
                 </span>
               </Link>

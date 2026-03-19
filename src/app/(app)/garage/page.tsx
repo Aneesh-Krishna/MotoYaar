@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { Plus, Car } from "lucide-react";
-import { TopBar } from "@/components/layout/TopBar";
 import { VehicleCard } from "@/components/ui/VehicleCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import type { Vehicle } from "@/types";
@@ -40,20 +39,6 @@ export default function GaragePage() {
 
   return (
     <>
-      <TopBar
-        title="Garage"
-        actions={
-          <Link
-            href="/garage/new"
-            className="flex items-center gap-1.5 bg-primary text-white rounded-btn px-3 py-1.5 text-caption font-semibold hover:bg-primary-dark transition-colors"
-            aria-label="Add a new vehicle"
-          >
-            <Plus size={14} aria-hidden="true" />
-            Add
-          </Link>
-        }
-      />
-
       <div className="px-screen-x py-5 max-w-screen-xl mx-auto lg:px-screen-x-md">
         {isEmpty ? (
           <EmptyState
