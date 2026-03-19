@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import Image from "next/image";
 import { FileText, Camera } from "lucide-react";
 import { toast } from "sonner";
 import { StepWizard } from "@/components/ui/StepWizard";
@@ -497,13 +496,31 @@ export function AddVehicleWizard() {
     goToNextStep();
   }
 
-  function handleImageUploaded(url: string, key: string) {
-    setWizardData((prev) => ({ ...prev, imageUrl: url, imageKey: key }));
+  function handleImageSelected(file: File, previewUrl: string) {
+    setWizardData((prev) => ({ ...prev, pendingImageFile: file, imagePreviewUrl: previewUrl }));
   }
 
   async function handleSave() {
     setConflictError(null);
     try {
+      let imageUrl: string | undefined;
+      let imageKey: string | undefined;
+
+      if (wizardData.pendingImageFile) {
+        const formData = new FormData();
+        formData.append("file", wizardData.pendingImageFile);
+        const res = await fetch("/api/uploads/vehicle-image", { method: "POST", body: formData });
+        if (!res.ok) {
+          const errBody = await res.json().catch(() => ({}));
+          console.error("[vehicle-image] upload failed", res.status, errBody);
+          toast.error("Image upload failed. Please try again.");
+          return;
+        }
+        const data = await res.json();
+        imageUrl = data.publicUrl;
+        imageKey = data.key;
+      }
+
       const payload = {
         name: wizardData.name,
         type: wizardData.type as VehicleType,
@@ -514,8 +531,8 @@ export function AddVehicleWizard() {
         registrationNumber: wizardData.registrationNumber,
         purchasedAt: wizardData.purchasedAt || undefined,
         previousOwners: wizardData.previousOwners,
-        imageUrl: wizardData.imageUrl || undefined,
-        imageKey: wizardData.imageKey || undefined,
+        imageUrl,
+        imageKey,
       };
       const vehicle = await createVehicle(payload);
       // Open the documents tab directly so user can add documents immediately
@@ -560,10 +577,9 @@ export function AddVehicleWizard() {
       )}
       {step === 3 && (
         <Step4
-          imageUrl={wizardData.imageUrl}
-          imageKey={wizardData.imageKey}
+          imagePreviewUrl={wizardData.imagePreviewUrl}
           onNext={goToNextStep}
-          onImageUploaded={handleImageUploaded}
+          onImageSelected={handleImageSelected}
         />
       )}
       {step === 4 && <Step5 onNext={goToNextStep} />}

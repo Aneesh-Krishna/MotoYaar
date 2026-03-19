@@ -58,7 +58,9 @@ export async function POST(req: NextRequest) {
     const key = `${session.user.id}/vehicles/images/${safeName}`;
 
     const buffer = Buffer.from(await file.arrayBuffer());
+    console.log(`[vehicle-image] uploading ${key} (${buffer.byteLength} bytes, ${file.type})`);
     await putObject(key, buffer, file.type);
+    console.log(`[vehicle-image] upload succeeded: ${key}`);
 
     const publicUrl = `${r2PublicUrl}/${key}`;
     return NextResponse.json({ key, publicUrl });

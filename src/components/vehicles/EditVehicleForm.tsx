@@ -4,27 +4,36 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import Image from "next/image";
 import { Camera } from "lucide-react";
 import { toast } from "sonner";
+import { z } from "zod";
 import { updateVehicleSchema, type UpdateVehicleInput } from "@/lib/validations/vehicle";
 import { updateVehicle } from "@/services/api/vehicleApi";
 import { ApiError } from "@/lib/api-client";
 import type { Vehicle } from "@/types";
 
+// Client-side form schema: coerces empty date strings to undefined so the
+// date input (which emits "" when blank) doesn't silently block submission.
+const editFormSchema = updateVehicleSchema.extend({
+  purchasedAt: z.preprocess(
+    (v) => (v === "" ? undefined : v),
+    z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()
+  ),
+});
+
 export function EditVehicleForm({ vehicle }: { vehicle: Vehicle }) {
   const router = useRouter();
-  const [uploading, setUploading] = useState(false);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string>(vehicle.imageUrl ?? "");
   const [regConflictError, setRegConflictError] = useState<string | null>(null);
 
   const {
     register,
     handleSubmit,
     setValue,
-    watch,
     formState: { errors, isSubmitting },
   } = useForm<UpdateVehicleInput>({
-    resolver: zodResolver(updateVehicleSchema),
+    resolver: zodResolver(editFormSchema),
     defaultValues: {
       name: vehicle.name,
       type: vehicle.type,
@@ -35,15 +44,10 @@ export function EditVehicleForm({ vehicle }: { vehicle: Vehicle }) {
       registrationNumber: vehicle.registrationNumber,
       purchasedAt: vehicle.purchasedAt ?? "",
       previousOwners: vehicle.previousOwners,
-      imageUrl: vehicle.imageUrl ?? "",
-      imageKey: "",
     },
   });
 
-  const imageUrl = watch("imageUrl");
-  const imageKey = watch("imageKey");
-
-  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -56,43 +60,32 @@ export function EditVehicleForm({ vehicle }: { vehicle: Vehicle }) {
       return;
     }
 
-    setUploading(true);
-    try {
-      // Delete old image if a new key was previously set (i.e., user already changed photo this session)
-      if (imageKey) {
-        await fetch(`/api/uploads/vehicle-image?key=${encodeURIComponent(imageKey)}`, {
-          method: "DELETE",
-        });
-      }
-
-      const res = await fetch("/api/uploads/vehicle-image", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ filename: file.name, contentType: file.type }),
-      });
-      if (!res.ok) throw new Error("Failed to get upload URL");
-      const { uploadUrl, key, publicUrl } = await res.json();
-
-      const putRes = await fetch(uploadUrl, {
-        method: "PUT",
-        headers: { "Content-Type": file.type },
-        body: file,
-      });
-      if (!putRes.ok) throw new Error(`R2 upload failed: ${putRes.status}`);
-
-      setValue("imageUrl", publicUrl);
-      setValue("imageKey", key);
-    } catch {
-      toast.error("Image upload failed. Please try again.");
-    } finally {
-      setUploading(false);
-    }
+    setPendingFile(file);
+    setImagePreviewUrl(URL.createObjectURL(file));
   }
 
   async function onSubmit(data: UpdateVehicleInput) {
     setRegConflictError(null);
     try {
-      await updateVehicle(vehicle.id, { ...data, imageUrl: data.imageUrl || undefined });
+      let imageUrl: string | undefined = vehicle.imageUrl ?? undefined;
+      let imageKey: string | undefined;
+
+      if (pendingFile) {
+        const formData = new FormData();
+        formData.append("file", pendingFile);
+        const res = await fetch("/api/uploads/vehicle-image", { method: "POST", body: formData });
+        if (!res.ok) {
+          const errBody = await res.json().catch(() => ({}));
+          console.error("[vehicle-image] upload failed", res.status, errBody);
+          toast.error("Image upload failed. Please try again.");
+          return;
+        }
+        const uploaded = await res.json();
+        imageUrl = uploaded.publicUrl;
+        imageKey = uploaded.key;
+      }
+
+      await updateVehicle(vehicle.id, { ...data, imageUrl, imageKey });
       router.push(`/garage/${vehicle.id}`);
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
@@ -116,7 +109,7 @@ export function EditVehicleForm({ vehicle }: { vehicle: Vehicle }) {
         </button>
         <button
           type="submit"
-          disabled={isSubmitting || uploading}
+          disabled={isSubmitting}
           className="bg-orange-500 text-white px-5 py-2 rounded-lg font-semibold text-sm disabled:opacity-50"
         >
           {isSubmitting ? "Saving…" : "Save"}
@@ -129,20 +122,21 @@ export function EditVehicleForm({ vehicle }: { vehicle: Vehicle }) {
           <label className="block text-sm font-medium text-gray-700">Vehicle Photo</label>
           <div className="flex flex-col items-start gap-3">
             <div className="w-20 h-20 rounded-lg overflow-hidden bg-gray-100 flex items-center justify-center flex-shrink-0">
-              {imageUrl ? (
-                <Image src={imageUrl} alt="Vehicle" width={80} height={80} className="object-cover w-full h-full" />
+              {imagePreviewUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={imagePreviewUrl} alt="Vehicle" className="object-cover w-full h-full" />
               ) : (
                 <Camera size={28} className="text-gray-300" />
               )}
             </div>
             <label className="cursor-pointer bg-white border border-orange-500 text-orange-500 px-4 py-2 rounded-lg font-semibold text-sm">
-              {uploading ? "Uploading…" : "Change Photo"}
+              {isSubmitting ? "Saving…" : "Change Photo"}
               <input
                 type="file"
                 accept="image/jpeg,image/png,image/webp"
                 className="hidden"
                 onChange={handleFileChange}
-                disabled={uploading}
+                disabled={isSubmitting}
               />
             </label>
           </div>
