@@ -30,6 +30,7 @@ export async function POST(req: Request) {
       documentType: "DL",
       confidence: result.confidence,
       parseStatus: result.expiryDate ? "parsed" : "failed",
+      parseReason: result.reason,
       tempR2Key: tempKey,
     });
   } catch (error) {
