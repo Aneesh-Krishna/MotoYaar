@@ -1,1 +1,1 @@
-ALTER TABLE "documents" ADD COLUMN "storage_key" text;
+ALTER TABLE "documents" ADD COLUMN IF NOT EXISTS "storage_key" text;
