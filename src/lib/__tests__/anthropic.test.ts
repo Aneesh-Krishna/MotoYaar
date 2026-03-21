@@ -142,33 +142,45 @@ describe("parseDocument — Anthropic provider", () => {
 });
 
 // ─── Mistral ──────────────────────────────────────────────────────────────────
+// Mistral uses fetch directly (SDK omits Content-Length on large payloads).
 
 describe("parseDocument — Mistral provider", () => {
   let parseDocument: (typeof import("@/lib/anthropic"))["parseDocument"];
-  const mockComplete = vi.fn();
+  const mockFetch = vi.fn();
+
+  function mistralOk(content: string) {
+    return Promise.resolve({
+      ok: true,
+      json: async () => ({ choices: [{ message: { content } }] }),
+    });
+  }
+
+  function mistralErr(status: number, message: string) {
+    return Promise.resolve({
+      ok: false,
+      status,
+      statusText: message,
+      text: async () => message,
+    });
+  }
 
   beforeAll(async () => {
     vi.stubEnv("AI_PROVIDER", "mistral");
     vi.resetModules();
-    vi.doMock("@mistralai/mistralai", () => ({
-      Mistral: class {
-        chat = { complete: mockComplete };
-      },
-    }));
     ({ parseDocument } = await import("@/lib/anthropic"));
+    vi.stubGlobal("fetch", mockFetch);
   });
 
   afterAll(() => {
     vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
     vi.resetModules();
   });
 
   beforeEach(() => vi.clearAllMocks());
 
   it("returns expiryDate and confidence on successful extraction", async () => {
-    mockComplete.mockResolvedValueOnce({
-      choices: [{ message: { content: VALID_JSON } }],
-    });
+    mockFetch.mockReturnValueOnce(mistralOk(VALID_JSON));
     const result = await parseDocument(EMPTY_BUFFER, "image/jpeg");
     expect(result.expiryDate).toBe("2026-12-31");
     expect(result.confidence).toBe("high");
@@ -176,41 +188,43 @@ describe("parseDocument — Mistral provider", () => {
   });
 
   it("returns no_date_found when AI finds no date", async () => {
-    mockComplete.mockResolvedValueOnce({
-      choices: [{ message: { content: NULL_JSON } }],
-    });
+    mockFetch.mockReturnValueOnce(mistralOk(NULL_JSON));
     const result = await parseDocument(EMPTY_BUFFER, "image/png");
     expect(result.expiryDate).toBeNull();
     expect(result.reason).toBe("no_date_found");
   });
 
   it("strips markdown code fences from response", async () => {
-    mockComplete.mockResolvedValueOnce({
-      choices: [{ message: { content: FENCED_JSON } }],
-    });
+    mockFetch.mockReturnValueOnce(mistralOk(FENCED_JSON));
     const result = await parseDocument(EMPTY_BUFFER, "image/jpeg");
     expect(result.expiryDate).toBe("2027-03-15");
     expect(result.reason).toBe("extracted");
   });
 
   it("returns parse_error on malformed JSON response", async () => {
-    mockComplete.mockResolvedValueOnce({
-      choices: [{ message: { content: BAD_JSON } }],
-    });
+    mockFetch.mockReturnValueOnce(mistralOk(BAD_JSON));
     const result = await parseDocument(EMPTY_BUFFER, "image/jpeg");
     expect(result.expiryDate).toBeNull();
     expect(result.reason).toBe("parse_error");
   });
 
-  it("returns parse_error on unexpected response shape", async () => {
-    mockComplete.mockResolvedValueOnce({ choices: [] });
+  it("returns api_error on HTTP error response (e.g. 411 Content-Length)", async () => {
+    mockFetch.mockReturnValueOnce(mistralErr(411, "A valid Content-Length header is required"));
     const result = await parseDocument(EMPTY_BUFFER, "image/jpeg");
     expect(result.expiryDate).toBeNull();
-    expect(result.reason).toBe("parse_error");
+    expect(result.reason).toBe("api_error");
   });
 
-  it("returns api_error when API throws", async () => {
-    mockComplete.mockRejectedValueOnce(new Error("503 service unavailable"));
+  it("sets Content-Length header on request", async () => {
+    mockFetch.mockReturnValueOnce(mistralOk(VALID_JSON));
+    await parseDocument(EMPTY_BUFFER, "image/jpeg");
+    const [, options] = mockFetch.mock.calls[0] as [string, RequestInit & { headers: Record<string, string> }];
+    expect(options.headers["Content-Length"]).toBeDefined();
+    expect(Number(options.headers["Content-Length"])).toBeGreaterThan(0);
+  });
+
+  it("returns api_error when fetch throws", async () => {
+    mockFetch.mockRejectedValueOnce(new Error("network error"));
     const result = await parseDocument(EMPTY_BUFFER, "image/jpeg");
     expect(result.expiryDate).toBeNull();
     expect(result.reason).toBe("api_error");

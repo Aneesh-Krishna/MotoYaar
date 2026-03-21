@@ -85,47 +85,50 @@ async function generateReportWithGemini(prompt: string): Promise<string> {
 }
 
 // ─── Mistral ──────────────────────────────────────────────────────────────────
+// Uses fetch directly instead of the SDK — the Mistral SDK v2.x omits
+// Content-Length on large base64 payloads, causing 411 errors in Next.js.
+
+async function mistralChat(model: string, messages: unknown[]): Promise<string> {
+  const body = JSON.stringify({ model, messages });
+  const res = await fetch("https://api.mistral.ai/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${process.env.MISTRAL_API_KEY!}`,
+      "Content-Type": "application/json",
+      "Content-Length": Buffer.byteLength(body).toString(),
+    },
+    body,
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText);
+    throw new Error(`Mistral API error ${res.status}: ${text}`);
+  }
+
+  const data = await res.json() as { choices?: Array<{ message?: { content?: unknown } }> };
+  const content = data.choices?.[0]?.message?.content;
+  if (typeof content !== "string") throw new Error("Unexpected response shape from Mistral API");
+  return content;
+}
 
 async function parseWithMistral(
   base64: string,
   imageMediaType: string
 ): Promise<{ expiryDate: string | null; confidence: "high" | "medium" | "low" | "none"; reason: ParseReason }> {
-  const { Mistral } = await import("@mistralai/mistralai");
-  const client = new Mistral({ apiKey: process.env.MISTRAL_API_KEY! });
-
-  const response = await client.chat.complete({
-    model: "pixtral-12b-2409",
-    messages: [
-      {
-        role: "user",
-        content: [
-          { type: "image_url", imageUrl: { url: `data:${imageMediaType};base64,${base64}` } },
-          { type: "text", text: PARSE_PROMPT },
-        ],
-      },
-    ],
-  });
-
-  const content = response.choices?.[0]?.message?.content;
-  if (typeof content !== "string") {
-    logger.warn({ response }, "parseDocument[mistral]: unexpected response shape");
-    return { expiryDate: null, confidence: "none", reason: "parse_error" };
-  }
+  const content = await mistralChat("pixtral-12b-2409", [
+    {
+      role: "user",
+      content: [
+        { type: "image_url", image_url: { url: `data:${imageMediaType};base64,${base64}` } },
+        { type: "text", text: PARSE_PROMPT },
+      ],
+    },
+  ]);
   return extractFromJson(content.trim());
 }
 
 async function generateReportWithMistral(prompt: string): Promise<string> {
-  const { Mistral } = await import("@mistralai/mistralai");
-  const client = new Mistral({ apiKey: process.env.MISTRAL_API_KEY! });
-
-  const response = await client.chat.complete({
-    model: "mistral-small-latest",
-    messages: [{ role: "user", content: prompt }],
-  });
-
-  const text = response.choices?.[0]?.message?.content;
-  if (typeof text !== "string" || !text) throw new Error("Unexpected empty response from Mistral API");
-  return text;
+  return mistralChat("mistral-small-latest", [{ role: "user", content: prompt }]);
 }
 
 // ─── Shared prompt & JSON extraction ─────────────────────────────────────────
@@ -137,6 +140,7 @@ Extract the expiry or validity date. Look for fields labelled any of:
 - Insurance Valid Upto / Policy Expiry
 - Valid Until / Renewal Date
 Date formats may be DD-Mon-YYYY (e.g. 20-Apr-2043), DD/MM/YYYY, or YYYY-MM-DD — convert to YYYY-MM-DD.
+IMPORTANT: Read year digits carefully and precisely. Expiry years in the 2030s–2050s are common and valid (e.g. driving licences valid 20 years, long-term insurance policies). Do NOT misread or transpose digits — e.g. 2043 must not become 2024, 2042 must not become 2022. Always extract the exact year shown.
 Return JSON: { "expiryDate": "YYYY-MM-DD" or null, "confidence": "high" | "medium" | "low" | "none" }
 If no expiry/validity date is found, return null for expiryDate and "none" for confidence.
 Return ONLY valid JSON — no markdown, no explanation.`;
