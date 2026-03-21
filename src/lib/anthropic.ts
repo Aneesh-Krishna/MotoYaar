@@ -1,13 +1,14 @@
 /**
- * AI client utilities — supports Anthropic and Google Gemini.
- * Switch via AI_PROVIDER env var: "anthropic" | "gemini" (default: "gemini")
+ * AI client utilities — supports Anthropic, Google Gemini, and Mistral.
+ * Switch via AI_PROVIDER env var: "anthropic" | "gemini" | "mistral" (default: "gemini")
  * Server-side only — never import in client components.
  */
 import { logger } from "@/lib/logger";
 
 export type ParseReason = "extracted" | "no_date_found" | "parse_error" | "api_error";
+type Provider = "anthropic" | "gemini" | "mistral";
 
-const PROVIDER = (process.env.AI_PROVIDER ?? "gemini") as "anthropic" | "gemini";
+const PROVIDER = (process.env.AI_PROVIDER ?? "gemini") as Provider;
 
 // ─── Anthropic ────────────────────────────────────────────────────────────────
 
@@ -63,7 +64,7 @@ async function parseWithGemini(
 ): Promise<{ expiryDate: string | null; confidence: "high" | "medium" | "low" | "none"; reason: ParseReason }> {
   const { GoogleGenerativeAI } = await import("@google/generative-ai");
   const genai = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-  const model = genai.getGenerativeModel({ model: "gemini-1.5-flash" });
+  const model = genai.getGenerativeModel({ model: "gemini-2.0-flash" });
 
   const result = await model.generateContent([
     { inlineData: { data: base64, mimeType: imageMediaType } },
@@ -76,11 +77,58 @@ async function parseWithGemini(
 async function generateReportWithGemini(prompt: string): Promise<string> {
   const { GoogleGenerativeAI } = await import("@google/generative-ai");
   const genai = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-  const model = genai.getGenerativeModel({ model: "gemini-1.5-flash" });
+  const model = genai.getGenerativeModel({ model: "gemini-2.0-flash" });
   const result = await model.generateContent(prompt);
   const text = result.response.text();
   if (!text) throw new Error("Unexpected empty response from Gemini API");
   return text;
+}
+
+// ─── Mistral ──────────────────────────────────────────────────────────────────
+// Uses fetch directly instead of the SDK — the Mistral SDK v2.x omits
+// Content-Length on large base64 payloads, causing 411 errors in Next.js.
+
+async function mistralChat(model: string, messages: unknown[]): Promise<string> {
+  const body = JSON.stringify({ model, messages });
+  const res = await fetch("https://api.mistral.ai/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${process.env.MISTRAL_API_KEY!}`,
+      "Content-Type": "application/json",
+      "Content-Length": Buffer.byteLength(body).toString(),
+    },
+    body,
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText);
+    throw new Error(`Mistral API error ${res.status}: ${text}`);
+  }
+
+  const data = await res.json() as { choices?: Array<{ message?: { content?: unknown } }> };
+  const content = data.choices?.[0]?.message?.content;
+  if (typeof content !== "string") throw new Error("Unexpected response shape from Mistral API");
+  return content;
+}
+
+async function parseWithMistral(
+  base64: string,
+  imageMediaType: string
+): Promise<{ expiryDate: string | null; confidence: "high" | "medium" | "low" | "none"; reason: ParseReason }> {
+  const content = await mistralChat("pixtral-12b-2409", [
+    {
+      role: "user",
+      content: [
+        { type: "image_url", image_url: { url: `data:${imageMediaType};base64,${base64}` } },
+        { type: "text", text: PARSE_PROMPT },
+      ],
+    },
+  ]);
+  return extractFromJson(content.trim());
+}
+
+async function generateReportWithMistral(prompt: string): Promise<string> {
+  return mistralChat("mistral-small-latest", [{ role: "user", content: prompt }]);
 }
 
 // ─── Shared prompt & JSON extraction ─────────────────────────────────────────
@@ -92,6 +140,7 @@ Extract the expiry or validity date. Look for fields labelled any of:
 - Insurance Valid Upto / Policy Expiry
 - Valid Until / Renewal Date
 Date formats may be DD-Mon-YYYY (e.g. 20-Apr-2043), DD/MM/YYYY, or YYYY-MM-DD — convert to YYYY-MM-DD.
+IMPORTANT: Read year digits carefully and precisely. Expiry years in the 2030s–2050s are common and valid (e.g. driving licences valid 20 years, long-term insurance policies). Do NOT misread or transpose digits — e.g. 2043 must not become 2024, 2042 must not become 2022. Always extract the exact year shown.
 Return JSON: { "expiryDate": "YYYY-MM-DD" or null, "confidence": "high" | "medium" | "low" | "none" }
 If no expiry/validity date is found, return null for expiryDate and "none" for confidence.
 Return ONLY valid JSON — no markdown, no explanation.`;
@@ -124,7 +173,7 @@ function extractFromJson(
 
 /**
  * Parse a vehicle document image to extract the expiry date.
- * Provider selected via AI_PROVIDER env var ("anthropic" | "gemini", default: "gemini").
+ * Provider selected via AI_PROVIDER env var ("anthropic" | "gemini" | "mistral", default: "gemini").
  * Never throws — returns reason so callers can surface meaningful errors.
  * Server-side only.
  */
@@ -138,9 +187,9 @@ export async function parseDocument(
 
     logger.info({ provider: PROVIDER }, "parseDocument: calling AI");
 
-    return PROVIDER === "anthropic"
-      ? await parseWithAnthropic(base64, imageMediaType)
-      : await parseWithGemini(base64, imageMediaType);
+    if (PROVIDER === "anthropic") return await parseWithAnthropic(base64, imageMediaType);
+    if (PROVIDER === "mistral") return await parseWithMistral(base64, imageMediaType);
+    return await parseWithGemini(base64, imageMediaType);
   } catch (err) {
     logger.error({ err, provider: PROVIDER }, "parseDocument: AI API call failed");
     return { expiryDate: null, confidence: "none", reason: "api_error" };
@@ -149,7 +198,7 @@ export async function parseDocument(
 
 /**
  * Generate a narrative AI spend report from expense data.
- * Provider selected via AI_PROVIDER env var ("anthropic" | "gemini", default: "gemini").
+ * Provider selected via AI_PROVIDER env var ("anthropic" | "gemini" | "mistral", default: "gemini").
  * Throws on failure (caller handles async retry/error state).
  * Server-side only.
  */
@@ -175,7 +224,7 @@ ${JSON.stringify(expenseData, null, 2)}
 
 Write the report now:`;
 
-  return PROVIDER === "anthropic"
-    ? generateReportWithAnthropic(prompt)
-    : generateReportWithGemini(prompt);
+  if (PROVIDER === "anthropic") return generateReportWithAnthropic(prompt);
+  if (PROVIDER === "mistral") return generateReportWithMistral(prompt);
+  return generateReportWithGemini(prompt);
 }

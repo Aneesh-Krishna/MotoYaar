@@ -91,13 +91,14 @@ describe("DocumentUpload manual entry", () => {
       documentType: "Insurance",
       confidence: "low",
       parseStatus: "failed",
+      parseReason: "no_date_found",
       tempR2Key: "user-1/documents/temp/abc.png",
     });
 
     await waitFor(() => {
       expect(screen.getByText("Enter Expiry Date")).toBeInTheDocument();
     });
-    expect(screen.getByText(/couldn't read the date/i)).toBeInTheDocument();
+    expect(screen.getByText(/no expiry date was found/i)).toBeInTheDocument();
   });
 
   it("shows manual entry screen when user taps 'Enter manually' on confirm screen", async () => {
@@ -152,6 +153,7 @@ describe("DocumentUpload manual entry", () => {
         documentType: "Insurance",
         confidence: "low",
         parseStatus: "failed",
+        parseReason: "no_date_found",
         tempR2Key: "user-1/documents/temp/abc.png",
       }),
     });
@@ -194,6 +196,7 @@ describe("DocumentUpload manual entry", () => {
         documentType: "Insurance",
         confidence: "low",
         parseStatus: "failed",
+        parseReason: "no_date_found",
         tempR2Key: "user-1/documents/temp/abc.png",
       }),
     });
@@ -239,6 +242,7 @@ describe("DocumentUpload manual entry", () => {
         documentType: "Insurance",
         confidence: "low",
         parseStatus: "failed",
+        parseReason: "no_date_found",
         tempR2Key: "user-1/documents/temp/abc.png",
       }),
     });
@@ -275,6 +279,7 @@ describe("DocumentUpload manual entry", () => {
         documentType: "Insurance",
         confidence: "low",
         parseStatus: "failed",
+        parseReason: "no_date_found",
         tempR2Key: "user-1/documents/temp/abc.png",
       }),
     });
