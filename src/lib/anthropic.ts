@@ -1,13 +1,14 @@
 /**
- * AI client utilities — supports Anthropic and Google Gemini.
- * Switch via AI_PROVIDER env var: "anthropic" | "gemini" (default: "gemini")
+ * AI client utilities — supports Anthropic, Google Gemini, and Mistral.
+ * Switch via AI_PROVIDER env var: "anthropic" | "gemini" | "mistral" (default: "gemini")
  * Server-side only — never import in client components.
  */
 import { logger } from "@/lib/logger";
 
 export type ParseReason = "extracted" | "no_date_found" | "parse_error" | "api_error";
+type Provider = "anthropic" | "gemini" | "mistral";
 
-const PROVIDER = (process.env.AI_PROVIDER ?? "gemini") as "anthropic" | "gemini";
+const PROVIDER = (process.env.AI_PROVIDER ?? "gemini") as Provider;
 
 // ─── Anthropic ────────────────────────────────────────────────────────────────
 
@@ -63,7 +64,7 @@ async function parseWithGemini(
 ): Promise<{ expiryDate: string | null; confidence: "high" | "medium" | "low" | "none"; reason: ParseReason }> {
   const { GoogleGenerativeAI } = await import("@google/generative-ai");
   const genai = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-  const model = genai.getGenerativeModel({ model: "gemini-1.5-flash" });
+  const model = genai.getGenerativeModel({ model: "gemini-2.0-flash" });
 
   const result = await model.generateContent([
     { inlineData: { data: base64, mimeType: imageMediaType } },
@@ -76,10 +77,54 @@ async function parseWithGemini(
 async function generateReportWithGemini(prompt: string): Promise<string> {
   const { GoogleGenerativeAI } = await import("@google/generative-ai");
   const genai = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-  const model = genai.getGenerativeModel({ model: "gemini-1.5-flash" });
+  const model = genai.getGenerativeModel({ model: "gemini-2.0-flash" });
   const result = await model.generateContent(prompt);
   const text = result.response.text();
   if (!text) throw new Error("Unexpected empty response from Gemini API");
+  return text;
+}
+
+// ─── Mistral ──────────────────────────────────────────────────────────────────
+
+async function parseWithMistral(
+  base64: string,
+  imageMediaType: string
+): Promise<{ expiryDate: string | null; confidence: "high" | "medium" | "low" | "none"; reason: ParseReason }> {
+  const { Mistral } = await import("@mistralai/mistralai");
+  const client = new Mistral({ apiKey: process.env.MISTRAL_API_KEY! });
+
+  const response = await client.chat.complete({
+    model: "pixtral-12b-2409",
+    messages: [
+      {
+        role: "user",
+        content: [
+          { type: "image_url", imageUrl: { url: `data:${imageMediaType};base64,${base64}` } },
+          { type: "text", text: PARSE_PROMPT },
+        ],
+      },
+    ],
+  });
+
+  const content = response.choices?.[0]?.message?.content;
+  if (typeof content !== "string") {
+    logger.warn({ response }, "parseDocument[mistral]: unexpected response shape");
+    return { expiryDate: null, confidence: "none", reason: "parse_error" };
+  }
+  return extractFromJson(content.trim());
+}
+
+async function generateReportWithMistral(prompt: string): Promise<string> {
+  const { Mistral } = await import("@mistralai/mistralai");
+  const client = new Mistral({ apiKey: process.env.MISTRAL_API_KEY! });
+
+  const response = await client.chat.complete({
+    model: "mistral-small-latest",
+    messages: [{ role: "user", content: prompt }],
+  });
+
+  const text = response.choices?.[0]?.message?.content;
+  if (typeof text !== "string" || !text) throw new Error("Unexpected empty response from Mistral API");
   return text;
 }
 
@@ -124,7 +169,7 @@ function extractFromJson(
 
 /**
  * Parse a vehicle document image to extract the expiry date.
- * Provider selected via AI_PROVIDER env var ("anthropic" | "gemini", default: "gemini").
+ * Provider selected via AI_PROVIDER env var ("anthropic" | "gemini" | "mistral", default: "gemini").
  * Never throws — returns reason so callers can surface meaningful errors.
  * Server-side only.
  */
@@ -138,9 +183,9 @@ export async function parseDocument(
 
     logger.info({ provider: PROVIDER }, "parseDocument: calling AI");
 
-    return PROVIDER === "anthropic"
-      ? await parseWithAnthropic(base64, imageMediaType)
-      : await parseWithGemini(base64, imageMediaType);
+    if (PROVIDER === "anthropic") return await parseWithAnthropic(base64, imageMediaType);
+    if (PROVIDER === "mistral") return await parseWithMistral(base64, imageMediaType);
+    return await parseWithGemini(base64, imageMediaType);
   } catch (err) {
     logger.error({ err, provider: PROVIDER }, "parseDocument: AI API call failed");
     return { expiryDate: null, confidence: "none", reason: "api_error" };
@@ -149,7 +194,7 @@ export async function parseDocument(
 
 /**
  * Generate a narrative AI spend report from expense data.
- * Provider selected via AI_PROVIDER env var ("anthropic" | "gemini", default: "gemini").
+ * Provider selected via AI_PROVIDER env var ("anthropic" | "gemini" | "mistral", default: "gemini").
  * Throws on failure (caller handles async retry/error state).
  * Server-side only.
  */
@@ -175,7 +220,7 @@ ${JSON.stringify(expenseData, null, 2)}
 
 Write the report now:`;
 
-  return PROVIDER === "anthropic"
-    ? generateReportWithAnthropic(prompt)
-    : generateReportWithGemini(prompt);
+  if (PROVIDER === "anthropic") return generateReportWithAnthropic(prompt);
+  if (PROVIDER === "mistral") return generateReportWithMistral(prompt);
+  return generateReportWithGemini(prompt);
 }
