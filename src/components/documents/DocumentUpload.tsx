@@ -14,6 +14,17 @@ import type { DocumentType } from "@/types";
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const ACCEPTED_TYPES = ["image/jpeg", "image/png", "application/pdf"];
 
+function extractErrorMessage(data: unknown, fallback: string): string {
+  if (!data || typeof data !== "object") return fallback;
+  const d = data as Record<string, unknown>;
+  if (typeof d.error === "string") return d.error;
+  if (d.error && typeof d.error === "object") {
+    const e = d.error as Record<string, unknown>;
+    if (typeof e.message === "string") return e.message;
+  }
+  return fallback;
+}
+
 type UploadScreen = "upload" | "parsing" | "confirm" | "manual" | "complete";
 
 interface ParseResult {
@@ -21,6 +32,7 @@ interface ParseResult {
   documentType: string;
   confidence: string;
   parseStatus: string;
+  parseReason: "extracted" | "no_date_found" | "parse_error" | "api_error";
   tempR2Key: string;
 }
 
@@ -103,7 +115,7 @@ export function DocumentUpload({
 
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.error ?? "Parse failed");
+        throw new Error(extractErrorMessage(data, "Parse failed"));
       }
 
       const result: ParseResult = await res.json();
@@ -150,7 +162,7 @@ export function DocumentUpload({
 
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.error ?? "Save failed");
+        throw new Error(extractErrorMessage(data, "Save failed"));
       }
 
       setScreen("complete"); // SF-1: Screen 4 — save confirmation
@@ -184,7 +196,7 @@ export function DocumentUpload({
 
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.error ?? "Save failed");
+        throw new Error(extractErrorMessage(data, "Save failed"));
       }
 
       toast.success("Document saved");
@@ -219,7 +231,7 @@ export function DocumentUpload({
 
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.error ?? "Save failed");
+        throw new Error(extractErrorMessage(data, "Save failed"));
       }
 
       toast.success("Document saved as incomplete");
@@ -305,8 +317,12 @@ export function DocumentUpload({
         <div className="text-center">
           <h3 className="font-semibold text-gray-800">Enter Expiry Date</h3>
           <p className="text-sm text-gray-500 mt-1">
-            {parseResult && !parseResult.extractedExpiryDate
-              ? "We couldn't read the date from your document."
+            {parseResult?.parseReason === "api_error"
+              ? "AI parsing is temporarily unavailable. Please enter the date manually."
+              : parseResult?.parseReason === "parse_error"
+              ? "We couldn't read the response from AI. Please enter the date manually."
+              : parseResult?.parseReason === "no_date_found"
+              ? "No expiry date was found in this document. Please enter it manually."
               : "Enter the date manually."}
           </p>
         </div>
