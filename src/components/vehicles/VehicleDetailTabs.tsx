@@ -2,11 +2,12 @@
 
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Receipt, Map } from "lucide-react";
+import { Map } from "lucide-react";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { DocumentsTab } from "@/components/documents/DocumentsTab";
+import { ExpensesTab } from "@/components/expenses/ExpensesTab";
 import { formatINR, formatDate, getDocumentStatus } from "@/lib/utils";
-import type { Vehicle, Document } from "@/types";
+import type { Vehicle, Document, Expense } from "@/types";
 
 interface Props {
   vehicle: Vehicle;
@@ -16,6 +17,7 @@ interface Props {
   nextExpiry: string | null;
   storagePreference: "parse_only" | "full_storage";
   documents: Document[];
+  expenses: Expense[];
 }
 
 const TABS = [
@@ -33,6 +35,7 @@ export function VehicleDetailTabs({
   nextExpiry,
   storagePreference,
   documents,
+  expenses,
 }: Props) {
   const router = useRouter();
   const pathname = usePathname();
@@ -93,12 +96,7 @@ export function VehicleDetailTabs({
           />
         )}
         {activeTab === "expenses" && (
-          <PlaceholderTab
-            Icon={Receipt}
-            message="No expenses yet. Start tracking what you spend on this vehicle."
-            ctaLabel="Add Expense"
-            ctaHref={`/garage/${vehicle.id}/expenses/new`}
-          />
+          <ExpensesTab vehicleId={vehicle.id} vehicleName={vehicle.name} expenses={expenses} />
         )}
         {activeTab === "trips" && (
           <PlaceholderTab

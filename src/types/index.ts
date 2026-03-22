@@ -76,6 +76,7 @@ export interface Expense {
   whereText?: string;
   comment?: "Overpriced" | "Average" | "Underpriced";
   receiptUrl?: string;
+  receiptKey?: string;
   createdAt: string;
 }
 

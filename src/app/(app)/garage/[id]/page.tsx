@@ -25,11 +25,12 @@ export default async function VehicleDetailPage({ params, searchParams }: Props)
     const VALID_TABS = ["overview", "documents", "expenses", "trips"];
     const activeTab = VALID_TABS.includes(searchParams.tab ?? "") ? searchParams.tab! : "overview";
 
-    const [totalSpend, lastService, nextExpiry, documents, dbUser] = await Promise.all([
+    const [totalSpend, lastService, nextExpiry, documents, expenses, dbUser] = await Promise.all([
       expenseService.sumByVehicle(vehicle.id),
       expenseService.lastServiceDate(vehicle.id),
       documentService.nextExpiry(vehicle.id),
       documentService.listByVehicle(vehicle.id, session.user.id),
+      expenseService.listByVehicle(vehicle.id, session.user.id),
       db.query.users.findFirst({ where: eq(users.id, session.user.id) }),
     ]);
 
@@ -48,6 +49,7 @@ export default async function VehicleDetailPage({ params, searchParams }: Props)
             nextExpiry={nextExpiry}
             storagePreference={storagePreference}
             documents={documents}
+            expenses={expenses}
           />
         </Suspense>
       </div>

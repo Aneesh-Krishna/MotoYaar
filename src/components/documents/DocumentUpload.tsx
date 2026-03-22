@@ -13,6 +13,40 @@ import type { DocumentType } from "@/types";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const ACCEPTED_TYPES = ["image/jpeg", "image/png", "application/pdf"];
+const MAX_UPLOAD_BYTES = 3 * 1024 * 1024; // 3MB — compress above this to stay under Vercel 4.5MB body limit
+const MAX_IMAGE_DIMENSION = 1920;
+
+/** Resize + compress an image File to JPEG if it exceeds MAX_UPLOAD_BYTES or MAX_IMAGE_DIMENSION. */
+async function compressImageIfNeeded(file: File): Promise<File> {
+  if (file.size <= MAX_UPLOAD_BYTES) return file;
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let { width, height } = img;
+      if (width > MAX_IMAGE_DIMENSION || height > MAX_IMAGE_DIMENSION) {
+        const ratio = Math.min(MAX_IMAGE_DIMENSION / width, MAX_IMAGE_DIMENSION / height);
+        width = Math.round(width * ratio);
+        height = Math.round(height * ratio);
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext("2d")!.drawImage(img, 0, 0, width, height);
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) return reject(new Error("Canvas compression failed"));
+          resolve(new File([blob], file.name.replace(/\.\w+$/, ".jpg"), { type: "image/jpeg" }));
+        },
+        "image/jpeg",
+        0.85
+      );
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
 
 function extractErrorMessage(data: unknown, fallback: string): string {
   if (!data || typeof data !== "object") return fallback;
@@ -32,7 +66,7 @@ interface ParseResult {
   documentType: string;
   confidence: string;
   parseStatus: string;
-  parseReason: "extracted" | "no_date_found" | "parse_error" | "api_error";
+  parseReason: "extracted" | "no_date_found" | "parse_error" | "api_error" | "rate_limited";
   tempR2Key: string;
 }
 
@@ -50,6 +84,7 @@ export function DocumentUpload({
   onSuccess,
 }: DocumentUploadProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const processingRef = useRef(false);
   const [screen, setScreen] = useState<UploadScreen>("upload");
   const [docType, setDocType] = useState<DocumentType | "">(mode === "dl" ? "DL" : "");
   const [label, setLabel] = useState("");
@@ -65,6 +100,8 @@ export function DocumentUpload({
   async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (processingRef.current) return;
+    processingRef.current = true;
 
     setError(null);
 
@@ -97,6 +134,11 @@ export function DocumentUpload({
         uploadFile = new File([blob], file.name.replace(/\.pdf$/i, ".png"), {
           type: "image/png",
         });
+      }
+
+      // Compress large images (e.g. mobile camera photos) to stay under Vercel's 4.5MB body limit
+      if (uploadFile.type !== "application/pdf") {
+        uploadFile = await compressImageIfNeeded(uploadFile);
       }
 
       const formData = new FormData();
@@ -132,6 +174,8 @@ export function DocumentUpload({
       setError(err instanceof Error ? err.message : "Upload failed. Please try again.");
       if (fileInputRef.current) fileInputRef.current.value = ""; // MF-2
       setScreen("upload");
+    } finally {
+      processingRef.current = false;
     }
   }
 
@@ -317,7 +361,9 @@ export function DocumentUpload({
         <div className="text-center">
           <h3 className="font-semibold text-gray-800">Enter Expiry Date</h3>
           <p className="text-sm text-gray-500 mt-1">
-            {parseResult?.parseReason === "api_error"
+            {parseResult?.parseReason === "rate_limited"
+              ? "Too many requests. Please wait a moment and try again, or enter the date manually."
+              : parseResult?.parseReason === "api_error"
               ? "AI parsing is temporarily unavailable. Please enter the date manually."
               : parseResult?.parseReason === "parse_error"
               ? "We couldn't read the response from AI. Please enter the date manually."

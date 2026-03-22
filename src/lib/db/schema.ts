@@ -161,6 +161,7 @@ export const expenses = pgTable(
     whereText: text("where_text"),
     comment: text("comment"),
     receiptUrl: text("receipt_url"),
+    receiptKey: text("receipt_key"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
