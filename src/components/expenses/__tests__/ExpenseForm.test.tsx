@@ -5,6 +5,10 @@ import { format, subYears } from "date-fns";
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
+vi.mock("next-auth/react", () => ({
+  useSession: () => ({ data: { user: { currency: "INR" } } }),
+}));
+
 vi.mock("sonner", () => ({
   toast: { success: vi.fn(), error: vi.fn() },
 }));
@@ -53,7 +57,7 @@ describe("ExpenseForm", () => {
   it("renders all fields with correct defaults", () => {
     render(<ExpenseForm onSaved={onSaved} onTripRedirect={onTripRedirect} />);
 
-    // Price field with ₹ prefix
+    // Price field with currency symbol prefix (INR = ₹ by default)
     expect(screen.getByPlaceholderText("0.00")).toBeInTheDocument();
     expect(screen.getByText("₹")).toBeInTheDocument();
 

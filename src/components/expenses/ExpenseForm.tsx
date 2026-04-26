@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useSession } from "next-auth/react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { format, parseISO, differenceInYears } from "date-fns";
@@ -8,7 +9,7 @@ import { AlertTriangle, Loader2, Paperclip, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { formatINR } from "@/utils/currency";
+import { formatCurrency, getCurrencySymbol } from "@/utils/currency";
 import { createExpenseSchema, type CreateExpenseInput } from "@/lib/validations/expense";
 import {
   createVehicleExpense,
@@ -36,6 +37,8 @@ const ALLOWED_RECEIPT_TYPES = ["image/jpeg", "image/png", "application/pdf"];
 const MAX_RECEIPT_SIZE = 5 * 1024 * 1024; // 5 MB
 
 export function ExpenseForm({ vehicleId, vehicleName, expense, onSaved, onTripRedirect }: ExpenseFormProps) {
+  const { data: session } = useSession();
+  const currencySymbol = getCurrencySymbol(session?.user?.currency ?? "INR");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -194,7 +197,7 @@ export function ExpenseForm({ vehicleId, vehicleName, expense, onSaved, onTripRe
           </div>
         </div>
         <div className="space-y-2 opacity-60">
-          <p className="text-sm"><span className="font-medium">Amount:</span> {formatINR(expense.price)}</p>
+          <p className="text-sm"><span className="font-medium">Amount:</span> {formatCurrency(expense.price, session?.user?.currency ?? "INR")}</p>
           <p className="text-sm"><span className="font-medium">Date:</span> {format(parseISO(expense.date), "d MMM yyyy")}</p>
           <p className="text-sm"><span className="font-medium">Reason:</span> Trip</p>
         </div>
@@ -225,7 +228,7 @@ export function ExpenseForm({ vehicleId, vehicleName, expense, onSaved, onTripRe
         </label>
         <div className="relative mt-1">
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-medium select-none">
-            ₹
+            {currencySymbol}
           </span>
           <input
             type="number"

@@ -1,6 +1,6 @@
 import { db } from "@/lib/db/client";
 import { documents, users, vehicles } from "@/lib/db/schema";
-import { eq, asc, isNull, and } from "drizzle-orm";
+import { eq, asc, isNull, isNotNull, and, desc } from "drizzle-orm";
 import { storageService } from "@/services/storageService";
 import { vehicleService } from "@/services/vehicleService";
 import { logger } from "@/lib/logger";
@@ -218,6 +218,26 @@ export const documentService = {
     return mapRow(doc);
   },
 
+  async getUserDocumentByType(userId: string, type: string): Promise<Document | null> {
+    const user = await db.query.users.findFirst({ where: eq(users.id, userId) });
+    const windowDays = user?.notificationWindowDays ?? 30;
+
+    const doc = await db.query.documents.findFirst({
+      where: and(
+        eq(documents.userId, userId),
+        eq(documents.type, type),
+        isNull(documents.vehicleId)
+      ),
+      orderBy: [desc(documents.createdAt)],
+    });
+
+    if (!doc) return null;
+    return {
+      ...mapRow(doc),
+      status: computeDocumentStatus(doc.expiryDate ?? null, windowDays),
+    };
+  },
+
   async listUserDocuments(userId: string): Promise<Document[]> {
     const user = await db.query.users.findFirst({ where: eq(users.id, userId) });
     const windowDays = user?.notificationWindowDays ?? 30;
@@ -230,6 +250,27 @@ export const documentService = {
       ...mapRow(doc),
       status: computeDocumentStatus(doc.expiryDate ?? null, windowDays),
     }));
+  },
+
+  async deleteAllStoredFiles(userId: string): Promise<number> {
+    const docsWithFiles = await db.query.documents.findMany({
+      where: and(eq(documents.userId, userId), isNotNull(documents.storageKey)),
+    });
+
+    let deleted = 0;
+    for (const doc of docsWithFiles) {
+      try {
+        await storageService.deleteFile(doc.storageKey!);
+        deleted++;
+      } catch (err) {
+        logger.warn({ err, docId: doc.id }, "R2 delete failed");
+      }
+      await db
+        .update(documents)
+        .set({ storageUrl: null, storageKey: null })
+        .where(eq(documents.id, doc.id));
+    }
+    return deleted;
   },
 
   async delete(docId: string, userId: string): Promise<void> {

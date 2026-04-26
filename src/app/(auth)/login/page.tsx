@@ -18,6 +18,19 @@ function BannedError() {
   );
 }
 
+function DeletedMessage() {
+  const searchParams = useSearchParams();
+  if (searchParams.get("message") !== "deleted") return null;
+  return (
+    <div
+      role="status"
+      className="w-full max-w-xs rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-body text-green-700"
+    >
+      Your account has been deleted. We&apos;re sorry to see you go.
+    </div>
+  );
+}
+
 export default function LoginPage() {
   return (
     <div className="min-h-screen bg-surface flex flex-col">
@@ -33,9 +46,12 @@ export default function LoginPage() {
           </p>
         </div>
 
-        {/* Banned account error */}
+        {/* Status messages */}
         <Suspense fallback={null}>
           <BannedError />
+        </Suspense>
+        <Suspense fallback={null}>
+          <DeletedMessage />
         </Suspense>
 
         {/* Google SSO button */}

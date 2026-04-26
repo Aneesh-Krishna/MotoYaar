@@ -12,7 +12,7 @@ vi.mock("@/lib/db/client", () => ({
   db: {
     query: {
       users: { findFirst: vi.fn() },
-      documents: { findMany: vi.fn() },
+      documents: { findMany: vi.fn(), findFirst: vi.fn() },
     },
     insert: vi.fn(() => mockInsert),
   },
@@ -220,5 +220,48 @@ describe("documentService.listUserDocuments()", () => {
     const docs = await documentService.listUserDocuments(USER_ID);
 
     expect(docs[0].status).toBe("expired");
+  });
+});
+
+// ─── documentService.getUserDocumentByType() ──────────────────────────────────
+
+describe("documentService.getUserDocumentByType()", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("returns null when user has no document of the given type", async () => {
+    vi.mocked(db.query.users.findFirst).mockResolvedValue(DB_USER_PARSE_ONLY as any);
+    vi.mocked(db.query.documents.findFirst).mockResolvedValue(undefined as any);
+
+    const result = await documentService.getUserDocumentByType(USER_ID, "DL");
+
+    expect(result).toBeNull();
+  });
+
+  it("returns the most recent DL document with computed status", async () => {
+    vi.mocked(db.query.users.findFirst).mockResolvedValue(DB_USER_PARSE_ONLY as any);
+    vi.mocked(db.query.documents.findFirst).mockResolvedValue(DB_DL_ROW as any);
+
+    const result = await documentService.getUserDocumentByType(USER_ID, "DL");
+
+    expect(result).not.toBeNull();
+    expect(result!.type).toBe("DL");
+    expect(result!.status).toBe("valid");
+    expect(result!.vehicleId).toBeUndefined();
+  });
+
+  it("queries findFirst with userId, type, and vehicleId IS NULL filter", async () => {
+    vi.mocked(db.query.users.findFirst).mockResolvedValue(DB_USER_PARSE_ONLY as any);
+    vi.mocked(db.query.documents.findFirst).mockResolvedValue(undefined as any);
+
+    await documentService.getUserDocumentByType(USER_ID, "DL");
+
+    expect(db.query.documents.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.anything(),
+        orderBy: expect.anything(),
+      })
+    );
   });
 });
