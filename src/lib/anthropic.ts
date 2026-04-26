@@ -5,7 +5,7 @@
  */
 import { logger } from "@/lib/logger";
 
-export type ParseReason = "extracted" | "no_date_found" | "parse_error" | "api_error";
+export type ParseReason = "extracted" | "no_date_found" | "parse_error" | "api_error" | "rate_limited";
 type Provider = "anthropic" | "gemini" | "mistral";
 
 const PROVIDER = (process.env.AI_PROVIDER ?? "gemini") as Provider;
@@ -100,6 +100,7 @@ async function mistralChat(model: string, messages: unknown[]): Promise<string> 
     body,
   });
 
+  if (res.status === 429) throw Object.assign(new Error("Rate limited"), { code: "rate_limited" });
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText);
     throw new Error(`Mistral API error ${res.status}: ${text}`);
@@ -191,8 +192,9 @@ export async function parseDocument(
     if (PROVIDER === "mistral") return await parseWithMistral(base64, imageMediaType);
     return await parseWithGemini(base64, imageMediaType);
   } catch (err) {
-    logger.error({ err, provider: PROVIDER }, "parseDocument: AI API call failed");
-    return { expiryDate: null, confidence: "none", reason: "api_error" };
+    const isRateLimited = (err as { code?: string })?.code === "rate_limited";
+    logger.error({ err, provider: PROVIDER, isRateLimited }, "parseDocument: AI API call failed");
+    return { expiryDate: null, confidence: "none", reason: isRateLimited ? "rate_limited" : "api_error" };
   }
 }
 

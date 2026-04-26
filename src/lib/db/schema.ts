@@ -32,6 +32,7 @@ export const users = pgTable(
       .notNull()
       .default("parse_only"),
     pushNotificationsEnabled: boolean("push_notifications_enabled").notNull().default(true),
+    emailNotificationsEnabled: boolean("email_notifications_enabled").notNull().default(true),
     walkthroughSeen: boolean("walkthrough_seen").notNull().default(false),
     status: text("status").notNull().default("active"),
     suspendedUntil: timestamp("suspended_until", { withTimezone: true }),
@@ -161,6 +162,7 @@ export const expenses = pgTable(
     whereText: text("where_text"),
     comment: text("comment"),
     receiptUrl: text("receipt_url"),
+    receiptKey: text("receipt_key"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
