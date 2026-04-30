@@ -98,6 +98,7 @@ export interface Trip {
   timeTaken?: string;
   breakdown: TripBreakdownItem[];
   totalCost?: number;
+  hasLiveRoute?: boolean;
   createdAt: string;
   // Joined
   vehicle?: Pick<Vehicle, "id" | "name" | "registrationNumber">;
@@ -176,4 +177,73 @@ export interface SpendReport {
   totalSpend: number;
   byCategory: { category: string; amount: number }[];
   trend?: { date: string; amount: number }[];
+}
+
+// ─── Live Trip Tracking ───────────────────────────────────────────────────────
+
+export interface Waypoint {
+  lat: number;
+  lng: number;
+  timestamp: number; // Unix ms
+  accuracy: number; // metres
+  speed: number | null; // m/s, null if unavailable
+  altitude: number | null;
+}
+
+export interface TripRoute {
+  id: string;
+  tripId: string;
+  waypoints: Waypoint[];
+  distanceKm: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LiveTripSession {
+  id: string;
+  tripId: string;
+  hostUserId: string;
+  inviteCode: string;
+  status: "active" | "ended" | "expired";
+  createdAt: string;
+  endedAt: string | null;
+  host?: Pick<User, "id" | "name">;
+  trip?: Pick<Trip, "id" | "title">;
+  participantCount?: number;
+}
+
+export interface LiveTripParticipant {
+  id: string;
+  sessionId: string;
+  userId: string;
+  status: "active" | "left";
+  joinedAt: string;
+  leftAt: string | null;
+  user?: Pick<User, "id" | "name">;
+}
+
+export interface ParticipantPosition {
+  userId: string;
+  lat: number;
+  lng: number;
+  timestamp: number;
+  speed: number | null;
+}
+
+export interface ParticipantMapState {
+  userId: string;
+  name: string;
+  image?: string;
+  position: ParticipantPosition | null;
+  connectionStatus: "active" | "offline" | "stale" | "left";
+  lastSeen: number | null;
+  color: string;
+}
+
+export interface LocalLiveTripState {
+  tripId: string;
+  status: "active" | "paused";
+  startedAt: number; // Unix ms
+  pausedAt: number | null;
+  pendingWaypoints: Waypoint[];
 }

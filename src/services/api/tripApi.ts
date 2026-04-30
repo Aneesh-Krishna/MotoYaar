@@ -1,2 +1,7 @@
-// TODO: Implement in Story 5.x — Trip Management
-export {};
+import { apiRequest } from "@/lib/api-client";
+
+export async function deleteTrip(tripId: string): Promise<void> {
+  await apiRequest(`/trips/${tripId}`, {
+    method: "DELETE",
+  });
+}

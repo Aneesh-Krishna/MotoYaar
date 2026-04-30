@@ -2,20 +2,23 @@
 
 import { useState } from "react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { MoreVertical, Pencil, Trash2 } from "lucide-react";
+import { MoreVertical, Pencil, Trash2, Radio } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
+import { StartLiveTripSheet } from "@/components/map/StartLiveTripSheet";
 import { deleteTrip } from "@/services/api/tripApi";
 
 interface Props {
   tripId: string;
+  hasLiveRoute?: boolean;
 }
 
-export function TripKebabMenu({ tripId }: Props) {
+export function TripKebabMenu({ tripId, hasLiveRoute }: Props) {
   const router = useRouter();
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showLiveSheet, setShowLiveSheet] = useState(false);
 
   const handleDelete = async () => {
     setIsDeleting(true);
@@ -49,6 +52,16 @@ export function TripKebabMenu({ tripId }: Props) {
             sideOffset={4}
             className="z-50 min-w-[160px] bg-white rounded-lg shadow-lg border border-gray-100 py-1 text-sm"
           >
+            {!hasLiveRoute && (
+              <DropdownMenu.Item
+                onSelect={() => setShowLiveSheet(true)}
+                className="flex items-center gap-2 px-4 py-2 text-orange-600 hover:bg-gray-50 cursor-pointer outline-none"
+              >
+                <Radio size={14} />
+                Start Live Trip
+              </DropdownMenu.Item>
+            )}
+
             <DropdownMenu.Item
               onSelect={() => router.push(`/trips/${tripId}/edit`)}
               className="flex items-center gap-2 px-4 py-2 text-gray-700 hover:bg-gray-50 cursor-pointer outline-none"
@@ -73,10 +86,20 @@ export function TripKebabMenu({ tripId }: Props) {
         onClose={() => setShowDeleteModal(false)}
         onConfirm={handleDelete}
         title="Delete this trip?"
-        description="Deleting this trip will also delete its associated expense entries. This cannot be undone. Continue?"
+        description={
+          hasLiveRoute
+            ? "Deleting this trip will also delete its associated expense entries and the recorded GPS route. This cannot be undone. Continue?"
+            : "Deleting this trip will also delete its associated expense entries. This cannot be undone. Continue?"
+        }
         confirmLabel="Delete Trip"
         isDestructive={true}
         isLoading={isDeleting}
+      />
+
+      <StartLiveTripSheet
+        open={showLiveSheet}
+        onClose={() => setShowLiveSheet(false)}
+        preselectedTripId={tripId}
       />
     </>
   );

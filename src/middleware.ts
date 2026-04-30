@@ -28,10 +28,11 @@ export const config = {
      * - /login (auth page)
      * - /community and /community/* (guest read access)
      * - /onboarding/walkthrough (public walkthrough preview — AC1)
+     * - /trips/join/* (guest read-only session view — Story 13.8)
      * - /api/auth/* (NextAuth routes)
      * - /_next/* (Next.js internals)
      * - /icons/*, /manifest.json (PWA static files)
      */
-    "/((?!login|community|onboarding/walkthrough|api/auth|_next|icons|manifest\\.json|favicon\\.ico).*)",
+    "/((?!login|community|onboarding/walkthrough|trips/join|api/auth|_next|icons|manifest\\.json|favicon\\.ico).*)",
   ],
 };
