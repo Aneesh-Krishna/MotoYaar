@@ -1,6 +1,6 @@
 import { db } from "@/lib/db/client";
-import { expenses } from "@/lib/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { expenses, vehicles } from "@/lib/db/schema";
+import { eq, desc, and, sql, lte } from "drizzle-orm";
 import { vehicleService } from "@/services/vehicleService";
 import type { CreateExpenseInput, UpdateExpenseInput } from "@/lib/validations/expense";
 import { NotFoundError, ForbiddenError } from "@/lib/errors";
@@ -162,25 +162,47 @@ export const expenseService = {
     return rows.map(mapExpense);
   },
 
-  /**
-   * Returns the most recent expense entries across all of a user's vehicles,
-   * joined with vehicle name.
-   *
-   * Stub: returns [] until Epic 05 implements expense tracking.
-   * Full implementation will: JOIN vehicles ON expenses.vehicle_id = vehicles.id,
-   * ORDER BY expenses.date DESC, LIMIT limit.
-   */
-  async recentByUser(_userId: string, _limit: number): Promise<RecentActivity[]> {
-    return [];
+  async recentByUser(userId: string, limit: number): Promise<RecentActivity[]> {
+    const rows = await db
+      .select({
+        expense: expenses,
+        vehicleName: vehicles.name,
+      })
+      .from(expenses)
+      .leftJoin(vehicles, eq(expenses.vehicleId, vehicles.id))
+      .where(eq(expenses.userId, userId))
+      .orderBy(desc(expenses.date), desc(expenses.createdAt))
+      .limit(limit);
+
+    return rows.map(({ expense, vehicleName }) => ({
+      ...mapExpense(expense),
+      vehicleName: vehicleName ?? "No vehicle",
+      kind: "expense" as const,
+    }));
   },
 
-  /** Stub: returns 0 until Epic 05 implements expense tracking. */
-  async sumByVehicle(_vehicleId: string): Promise<number> {
-    return 0;
+  async sumByVehicle(vehicleId: string): Promise<number> {
+    const [row] = await db
+      .select({ total: sql<string>`COALESCE(SUM(${expenses.price}), '0')` })
+      .from(expenses)
+      .where(eq(expenses.vehicleId, vehicleId));
+    return parseFloat(row?.total ?? "0");
   },
 
-  /** Stub: returns null until Epic 05 implements expense tracking. */
-  async lastServiceDate(_vehicleId: string): Promise<string | null> {
-    return null;
+  async lastServiceDate(vehicleId: string): Promise<string | null> {
+    const [row] = await db
+      .select({ date: expenses.date })
+      .from(expenses)
+      .where(and(eq(expenses.vehicleId, vehicleId), eq(expenses.reason, "Service")))
+      .orderBy(desc(expenses.date))
+      .limit(1);
+    return row?.date ?? null;
+  },
+
+  async getByTripId(tripId: string, userId: string): Promise<Expense | null> {
+    const row = await db.query.expenses.findFirst({
+      where: and(eq(expenses.tripId, tripId), eq(expenses.userId, userId)),
+    });
+    return row ? mapExpense(row) : null;
   },
 };

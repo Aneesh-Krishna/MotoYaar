@@ -34,6 +34,7 @@ const POST: Post = {
   tags: [],
   edited: false,
   createdAt: new Date("2026-04-20T10:00:00Z").toISOString(),
+  updatedAt: new Date("2026-04-20T10:00:00Z").toISOString(),
   author: { id: "user-1", name: "Alice", username: "alice", profileImageUrl: undefined },
   likes: 5,
   dislikes: 1,

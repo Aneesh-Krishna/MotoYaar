@@ -81,7 +81,7 @@ export interface Expense {
 }
 
 export interface TripBreakdownItem {
-  category: "Food" | "Fuel" | "Stay" | "Other";
+  category: "Food" | "Fuel" | "Stay" | "Toll" | "Other";
   amount: number;
 }
 
@@ -98,6 +98,7 @@ export interface Trip {
   timeTaken?: string;
   breakdown: TripBreakdownItem[];
   totalCost?: number;
+  hasLiveRoute?: boolean;
   createdAt: string;
   // Joined
   vehicle?: Pick<Vehicle, "id" | "name" | "registrationNumber">;
@@ -113,6 +114,7 @@ export interface Post {
   tags: string[];
   edited: boolean;
   createdAt: string;
+  updatedAt: string;
   // Joined
   author?: Pick<User, "id" | "name" | "username" | "profileImageUrl">;
   likes: number;
@@ -127,6 +129,7 @@ export interface Comment {
   parentCommentId?: string;
   userId: string;
   content: string;
+  deleted?: boolean;
   createdAt: string;
   author?: Pick<User, "id" | "name" | "username" | "profileImageUrl">;
   replies?: Comment[];
@@ -177,3 +180,153 @@ export interface SpendReport {
   byCategory: { category: string; amount: number }[];
   trend?: { date: string; amount: number }[];
 }
+
+// ─── Live Trip Tracking ───────────────────────────────────────────────────────
+
+export interface Waypoint {
+  lat: number;
+  lng: number;
+  timestamp: number; // Unix ms
+  accuracy: number; // metres
+  speed: number | null; // m/s, null if unavailable
+  altitude: number | null;
+}
+
+export interface TripRoute {
+  id: string;
+  tripId: string;
+  waypoints: Waypoint[];
+  distanceKm: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LiveTripSession {
+  id: string;
+  tripId: string;
+  hostUserId: string;
+  inviteCode: string;
+  status: "active" | "ended" | "expired";
+  createdAt: string;
+  endedAt: string | null;
+  host?: Pick<User, "id" | "name">;
+  trip?: Pick<Trip, "id" | "title">;
+  participantCount?: number;
+}
+
+export interface LiveTripParticipant {
+  id: string;
+  sessionId: string;
+  userId: string;
+  status: "active" | "left";
+  joinedAt: string;
+  leftAt: string | null;
+  user?: Pick<User, "id" | "name">;
+}
+
+export interface ParticipantPosition {
+  userId: string;
+  lat: number;
+  lng: number;
+  timestamp: number;
+  speed: number | null;
+}
+
+export interface ParticipantMapState {
+  userId: string;
+  name: string;
+  image?: string;
+  position: ParticipantPosition | null;
+  connectionStatus: "active" | "offline" | "stale" | "left";
+  lastSeen: number | null;
+  color: string;
+}
+
+export interface LocalLiveTripState {
+  tripId: string;
+  status: "active" | "paused";
+  startedAt: number; // Unix ms
+  pausedAt: number | null;
+  pendingWaypoints: Waypoint[];
+}
+
+// ─── Reports ──────────────────────────────────────────────────────────────────
+
+export interface OverallReportFilter {
+  type: "monthly" | "range" | "yearly";
+  month1?: string;
+  month2?: string;
+  from?: string;
+  to?: string;
+  compFrom?: string;
+  compTo?: string;
+}
+
+export interface ReportFilter {
+  filter?: string;
+  from?: string;
+  to?: string;
+}
+
+export interface CategoryDataPoint {
+  category: string;
+  amount: number;
+  count: number;
+  percentage: number;
+}
+
+export interface MonthlyDataPoint {
+  month: string;
+  amount: number;
+}
+
+export interface VehicleReport {
+  vehicle: Pick<Vehicle, "id" | "name" | "registrationNumber">;
+  totalSpend: number;
+  prevTotalSpend: number;
+  currency: string;
+  byCategory: CategoryDataPoint[];
+  monthlyData: MonthlyDataPoint[];
+  avgMonthlySpend: number;
+  mostExpensiveCategory: string | null;
+  hadCurrencyConversion: boolean;
+}
+
+export type PostDetail = Post & { comments: Comment[] };
+
+export interface OverallReport {
+  totalSpend: number;
+  prevTotalSpend: number;
+  currency: string;
+  comparisonLabel: string;
+  hadCurrencyConversion: boolean;
+  perVehicle: { vehicleId: string; vehicleName: string; total: number }[];
+  byCategory: CategoryDataPoint[];
+  monthlyData: { month: string; primary: number; comparison: number }[];
+}
+
+export interface ExpenseSnapshot {
+  periodLabel: string;
+  totalExpenses: number;
+  currency: string;
+  byCategory: { category: string; total: number; count: number }[];
+  monthlyTotals: { month: string; total: number }[];
+  vehicleCount: number;
+  topVehicle?: { name: string; total: number };
+}
+
+// ─── AI Reports ───────────────────────────────────────────────────────────────
+
+export interface AiReport {
+  id: string;
+  userId: string;
+  status: "pending" | "generating" | "ready" | "failed";
+  periodLabel?: string;
+  content?: string;
+  requestedAt: string;
+  completedAt?: string;
+}
+
+// ─── Community ────────────────────────────────────────────────────────────────
+
+export type FeedPost = Post;

@@ -8,6 +8,7 @@ interface PostCardProps {
   post: Post;
   pinned?: boolean;
   className?: string;
+  isAuthenticated?: boolean;
 }
 
 export function PostCard({ post, pinned = false, className }: PostCardProps) {
