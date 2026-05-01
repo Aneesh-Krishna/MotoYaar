@@ -46,9 +46,20 @@ function mapRow(row: typeof documents.$inferSelect): Document {
 }
 
 export const documentService = {
-  /** Stub: returns null until Epic 04 implements document management. */
-  async nextExpiry(_vehicleId: string): Promise<string | null> {
-    return null;
+  async nextExpiry(vehicleId: string): Promise<string | null> {
+    const today = new Date().toISOString().split("T")[0];
+    const [row] = await db
+      .select({ expiryDate: documents.expiryDate })
+      .from(documents)
+      .where(
+        and(
+          eq(documents.vehicleId, vehicleId),
+          isNotNull(documents.expiryDate)
+        )
+      )
+      .orderBy(asc(documents.expiryDate))
+      .limit(1);
+    return row?.expiryDate ?? null;
   },
 
   async listByVehicle(vehicleId: string, userId: string): Promise<Document[]> {

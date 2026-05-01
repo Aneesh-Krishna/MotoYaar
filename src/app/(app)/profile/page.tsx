@@ -8,23 +8,14 @@ import {
   Settings,
   Instagram,
 } from "lucide-react";
+import { getSession } from "@/lib/session";
+import { redirect } from "next/navigation";
+import { userService } from "@/services/userService";
+import { db } from "@/lib/db/client";
+import { vehicles, trips, posts } from "@/lib/db/schema";
+import { eq, sql } from "drizzle-orm";
 import { SignOutButton } from "@/components/ui/SignOutButton";
 import { cn } from "@/lib/utils";
-
-// ─── Mock data ────────────────────────────────────────────────────────────────
-
-const MOCK_USER = {
-  name: "Rahul Desai",
-  username: "rahuldesai",
-  bio: "Bike enthusiast. Royal Enfield owner. Weekend rider.",
-  profileImageUrl: null as string | null,
-  instagramLink: "https://instagram.com/rahuldesai",
-  vehicleCount: 2,
-  tripCount: 5,
-  postCount: 3,
-};
-
-// ─── Sub-components ───────────────────────────────────────────────────────────
 
 function ProfileActionCard({
   href,
@@ -58,42 +49,52 @@ function ProfileActionCard({
   );
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
+export default async function ProfilePage() {
+  const session = await getSession();
+  if (!session) redirect("/login");
 
-export default function ProfilePage() {
+  const [user, counts] = await Promise.all([
+    userService.getById(session.user.id),
+    Promise.all([
+      db.select({ count: sql<number>`COUNT(*)::int` }).from(vehicles).where(eq(vehicles.userId, session.user.id)),
+      db.select({ count: sql<number>`COUNT(*)::int` }).from(trips).where(eq(trips.userId, session.user.id)),
+      db.select({ count: sql<number>`COUNT(*)::int` }).from(posts).where(eq(posts.userId, session.user.id)),
+    ]),
+  ]);
+
+  const [vehicleCount, tripCount, postCount] = counts.map((r) => r[0]?.count ?? 0);
+
   return (
     <>
       <div className="px-screen-x py-5 space-y-5 max-w-screen-xl mx-auto lg:px-screen-x-md">
 
         {/* Profile header */}
         <section aria-label="Profile info" className="flex items-start gap-4">
-          {/* Avatar */}
           <div className="relative w-20 h-20 rounded-full bg-gray-200 shrink-0 overflow-hidden">
-            {MOCK_USER.profileImageUrl ? (
+            {user.profileImageUrl ? (
               <Image
-                src={MOCK_USER.profileImageUrl}
-                alt={MOCK_USER.name}
+                src={user.profileImageUrl}
+                alt={user.name}
                 fill
                 className="object-cover"
                 sizes="80px"
               />
             ) : (
               <span className="absolute inset-0 flex items-center justify-center text-2xl font-bold text-gray-400">
-                {MOCK_USER.name[0]}
+                {user.name[0]}
               </span>
             )}
           </div>
 
-          {/* Info */}
           <div className="flex-1 min-w-0 pt-1">
-            <h2 className="text-title font-bold text-foreground">{MOCK_USER.name}</h2>
-            <p className="text-body text-foreground-muted">@{MOCK_USER.username}</p>
-            {MOCK_USER.bio && (
-              <p className="text-body text-foreground mt-1.5">{MOCK_USER.bio}</p>
+            <h2 className="text-title font-bold text-foreground">{user.name}</h2>
+            <p className="text-body text-foreground-muted">@{user.username}</p>
+            {user.bio && (
+              <p className="text-body text-foreground mt-1.5">{user.bio}</p>
             )}
-            {MOCK_USER.instagramLink && (
+            {user.instagramLink && (
               <a
-                href={MOCK_USER.instagramLink}
+                href={user.instagramLink}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1.5 text-caption text-primary mt-1 hover:underline"
@@ -118,9 +119,9 @@ export default function ProfilePage() {
           className="grid grid-cols-3 bg-card rounded-card border border-border shadow-card"
         >
           {[
-            { label: "Vehicles", value: MOCK_USER.vehicleCount },
-            { label: "Trips", value: MOCK_USER.tripCount },
-            { label: "Posts", value: MOCK_USER.postCount },
+            { label: "Vehicles", value: vehicleCount },
+            { label: "Trips", value: tripCount },
+            { label: "Posts", value: postCount },
           ].map(({ label, value }, i) => (
             <div
               key={label}
@@ -138,7 +139,7 @@ export default function ProfilePage() {
         {/* Action cards */}
         <section aria-label="Profile actions" className="space-y-3">
           <ProfileActionCard
-            href="/profile/reports"
+            href="/reports"
             icon={BarChart2}
             label="Reports & Spends"
             description="View overall spend across all vehicles"
@@ -172,7 +173,6 @@ export default function ProfilePage() {
           <ChevronRight size={16} className="text-foreground-muted" aria-hidden="true" />
         </Link>
 
-        {/* Sign out */}
         <SignOutButton />
       </div>
     </>

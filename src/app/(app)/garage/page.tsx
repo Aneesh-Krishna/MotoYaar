@@ -1,41 +1,17 @@
 import Link from "next/link";
 import { Plus, Car } from "lucide-react";
+import { getSession } from "@/lib/session";
+import { redirect } from "next/navigation";
+import { getCachedVehicles } from "@/lib/cache";
 import { VehicleCard } from "@/components/ui/VehicleCard";
 import { EmptyState } from "@/components/ui/EmptyState";
-import type { Vehicle } from "@/types";
 
-// ─── Mock data ────────────────────────────────────────────────────────────────
+export default async function GaragePage() {
+  const session = await getSession();
+  if (!session) redirect("/login");
 
-const MOCK_VEHICLES: Vehicle[] = [
-  {
-    id: "v1",
-    userId: "u1",
-    name: "Royal Enfield Meteor",
-    type: "2-wheeler",
-    registrationNumber: "MH02AB1234",
-    previousOwners: 0,
-    totalSpend: 14500,
-    nextDocumentStatus: "expiring",
-    nextDocumentExpiry: "2026-04-10",
-    createdAt: "2025-01-01",
-  },
-  {
-    id: "v2",
-    userId: "u1",
-    name: "Maruti Swift",
-    type: "4-wheeler",
-    registrationNumber: "MH02CD5678",
-    previousOwners: 1,
-    totalSpend: 42000,
-    nextDocumentStatus: "valid",
-    createdAt: "2025-03-01",
-  },
-];
-
-// ─── Page ─────────────────────────────────────────────────────────────────────
-
-export default function GaragePage() {
-  const isEmpty = MOCK_VEHICLES.length === 0;
+  const vehicles = await getCachedVehicles(session.user.id);
+  const isEmpty = vehicles.length === 0;
 
   return (
     <>
@@ -60,7 +36,7 @@ export default function GaragePage() {
             className="space-y-3 lg:grid lg:grid-cols-2 lg:gap-4 lg:space-y-0"
             aria-label="Your vehicles"
           >
-            {MOCK_VEHICLES.map((vehicle) => (
+            {vehicles.map((vehicle) => (
               <li key={vehicle.id}>
                 <VehicleCard vehicle={vehicle} />
               </li>
@@ -69,7 +45,6 @@ export default function GaragePage() {
         )}
       </div>
 
-      {/* FAB — mobile only */}
       {!isEmpty && (
         <Link
           href="/garage/new"

@@ -1,8 +1,10 @@
 import { getSession } from "@/lib/session";
 import { NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { vehicleService } from "@/services/vehicleService";
 import { createVehicleSchema } from "@/lib/validations/vehicle";
 import { handleApiError } from "@/lib/errors";
+import { CACHE_TAGS } from "@/lib/cache";
 
 export async function GET() {
   try {
@@ -27,6 +29,7 @@ export async function POST(req: Request) {
     const body = await req.json();
     const data = createVehicleSchema.parse(body);
     const vehicle = await vehicleService.create(session.user.id, data);
+    revalidateTag(CACHE_TAGS.vehicles(session.user.id));
     return NextResponse.json(vehicle, { status: 201 });
   } catch (error) {
     return handleApiError(error);

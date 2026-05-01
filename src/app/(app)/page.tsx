@@ -2,8 +2,7 @@ import { getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Plus, Car, IndianRupee } from "lucide-react";
-import { vehicleService } from "@/services/vehicleService";
-import { expenseService } from "@/services/expenseService";
+import { getCachedVehicles, getCachedRecentExpenses } from "@/lib/cache";
 import { VehicleCard } from "@/components/ui/VehicleCard";
 import { AlertBanner } from "@/components/ui/AlertBanner";
 import { RefreshButton } from "./_components/RefreshButton";
@@ -175,8 +174,8 @@ export default async function DashboardPage() {
   if (!session) redirect("/login");
 
   const [vehicles, recentActivities] = await Promise.all([
-    vehicleService.listByUser(session.user.id),
-    expenseService.recentByUser(session.user.id, 5),
+    getCachedVehicles(session.user.id),
+    getCachedRecentExpenses(session.user.id, 5),
   ]);
 
   // Empty state — show full-screen prompt when user has no vehicles
