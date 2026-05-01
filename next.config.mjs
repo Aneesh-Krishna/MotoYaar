@@ -5,7 +5,6 @@ const withPWA = withPWAInit({
   register: true,
   skipWaiting: true,
   disable: process.env.NODE_ENV === "development",
-  customWorkerSrc: "public/sw-custom.js",
 });
 
 /** @type {import('next').NextConfig} */

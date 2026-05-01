@@ -13,10 +13,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     const { isPinned } = await req.json();
     await db
       .update(posts)
-      .set({
-        isPinned: !!isPinned,
-        pinnedAt: isPinned ? new Date() : null,
-      })
+      .set({ isPinned: !!isPinned })
       .where(eq(posts.id, params.id));
     return NextResponse.json({ ok: true });
   } catch (error) {

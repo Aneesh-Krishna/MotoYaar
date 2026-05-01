@@ -37,6 +37,12 @@ export class QuotaExceededError extends Error {
     this.name = "QuotaExceededError";
   }
 }
+export class BadRequestError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "BadRequestError";
+  }
+}
 
 // ─── Central API Error Handler ─────────────────────────────────────────────
 export function handleApiError(error: unknown): NextResponse {
@@ -72,6 +78,12 @@ export function handleApiError(error: unknown): NextResponse {
     return NextResponse.json(
       { error: { code: "QUOTA_EXCEEDED", message: error.message, ...base } },
       { status: 403 }
+    );
+  }
+  if (error instanceof BadRequestError) {
+    return NextResponse.json(
+      { error: { code: "BAD_REQUEST", message: error.message, ...base } },
+      { status: 400 }
     );
   }
 

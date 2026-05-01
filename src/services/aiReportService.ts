@@ -21,6 +21,8 @@ function mapReport(row: typeof aiReports.$inferSelect): AiReport {
   };
 }
 
+export const FREE_REPORTS_PER_MONTH = 1;
+
 export const aiReportService = {
   async listByUser(userId: string): Promise<AiReport[]> {
     const rows = await db
@@ -51,7 +53,7 @@ export const aiReportService = {
   },
 
   async checkQuota(userId: string): Promise<{ allowed: boolean; usedThisMonth: number; freePerMonth: number }> {
-    const FREE_PER_MONTH = 1;
+    const FREE_PER_MONTH = FREE_REPORTS_PER_MONTH;
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
     const [result] = await db

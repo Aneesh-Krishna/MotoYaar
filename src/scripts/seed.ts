@@ -3,7 +3,8 @@ import { adminAccounts, users } from "@/lib/db/schema";
 import bcrypt from "bcryptjs";
 import { eq } from "drizzle-orm";
 
-const ADMIN_SYSTEM_USER_EMAIL = "official@motoyaar.app";
+const SYSTEM_USER_USERNAME = "motoyaar";
+const SYSTEM_USER_GOOGLE_ID = "system-motoyaar-official";
 
 async function seed() {
   const adminEmail = process.env.ADMIN_EMAIL;
@@ -27,19 +28,18 @@ async function seed() {
   }
 
   const existingSystemUser = await db.query.users.findFirst({
-    where: eq(users.email, ADMIN_SYSTEM_USER_EMAIL),
+    where: eq(users.username, SYSTEM_USER_USERNAME),
   });
 
   if (existingSystemUser) {
     console.log("Admin system user already exists — skipping");
   } else {
     await db.insert(users).values({
-      email: ADMIN_SYSTEM_USER_EMAIL,
+      googleId: SYSTEM_USER_GOOGLE_ID,
       name: "MotoYaar Official",
-      username: "motoyaar",
-      isVerified: true,
+      username: SYSTEM_USER_USERNAME,
     });
-    console.log("Admin system user created: official@motoyaar.app");
+    console.log(`Admin system user created: ${SYSTEM_USER_USERNAME}`);
   }
 }
 
