@@ -7,8 +7,18 @@ export const CURRENCIES = [
   { code: "SGD", label: "Singapore Dollar", symbol: "S$" },
 ] as const;
 
+// Approximate exchange rates relative to INR
+const RATES_TO_INR: Record<string, number> = {
+  INR: 1,
+  USD: 83.5,
+  EUR: 90.5,
+  GBP: 105.0,
+  AED: 22.7,
+  SGD: 62.0,
+};
+
 export function getCurrencySymbol(currency: string): string {
-  return CURRENCIES.find((c) => c.code === currency)?.symbol ?? "₹";
+  return CURRENCIES.find((c) => c.code === currency)?.symbol ?? currency;
 }
 
 export function formatINR(amount: number): string {
@@ -25,4 +35,18 @@ export function formatCurrency(amount: number, currency: string): string {
     currency,
     maximumFractionDigits: 0,
   }).format(amount);
+}
+
+export function convertAmount(amount: number, fromCurrency: string, toCurrency: string): number {
+  if (fromCurrency === toCurrency) return amount;
+  const fromRate = RATES_TO_INR[fromCurrency] ?? 1;
+  const toRate = RATES_TO_INR[toCurrency] ?? 1;
+  return (amount * fromRate) / toRate;
+}
+
+export function hadCurrencyConversion(
+  expenses: { currency: string }[],
+  targetCurrency: string
+): boolean {
+  return expenses.some((e) => e.currency !== targetCurrency);
 }

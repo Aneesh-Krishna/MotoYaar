@@ -113,6 +113,8 @@ export interface Post {
   links: string[];
   tags: string[];
   edited: boolean;
+  isPinned?: boolean;
+  isHidden?: boolean;
   createdAt: string;
   updatedAt: string;
   // Joined

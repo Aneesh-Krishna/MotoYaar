@@ -10,13 +10,12 @@ export async function DELETE(_req: Request, { params }: { params: { accessId: st
 
   try {
     const result = await vehicleInviteService.revokeAccess(params.accessId, session.user.id);
-    notificationService.create(
-      result.revokedUserId,
-      "access_revoked",
-      "Your access has been removed",
-      `Your access to ${result.vehicleName} has been removed by the owner.`,
-      "/garage"
-    ).catch(() => {});
+    notificationService.create({
+      userId: result.revokedUserId,
+      type: "access_revoked",
+      message: `Your access to ${result.vehicleName} has been removed by the owner.`,
+      referenceId: "/garage",
+    }).catch(() => {});
     return NextResponse.json({ ok: true });
   } catch (error) {
     return handleApiError(error);

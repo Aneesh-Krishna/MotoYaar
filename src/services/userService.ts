@@ -16,6 +16,9 @@ export const userService = {
       instagramLink: string | null;
       walkthroughSeen: boolean;
       documentStoragePreference: "parse_only" | "full_storage";
+      notificationWindowDays: number;
+      emailNotificationsEnabled: boolean;
+      pushNotificationsEnabled: boolean;
     }>
   ) {
     if (data.username) {

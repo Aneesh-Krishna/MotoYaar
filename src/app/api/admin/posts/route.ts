@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/adminSession";
 import { communityService } from "@/services/communityService";
-import { userService } from "@/services/userService";
 import { handleApiError } from "@/lib/errors";
 import { createPostSchema } from "@/lib/validations/post";
 import { db } from "@/lib/db/client";
-import { posts } from "@/lib/db/schema";
+import { posts, users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 
 export async function POST(req: Request) {
@@ -16,7 +15,9 @@ export async function POST(req: Request) {
     const body = await req.json();
     const data = createPostSchema.parse(body);
 
-    const adminUser = await userService.getByEmail("official@motoyaar.app");
+    const adminUser = await db.query.users.findFirst({
+      where: eq(users.username, "motoyaar"),
+    });
     if (!adminUser) {
       return NextResponse.json({ error: "Admin system user not seeded" }, { status: 500 });
     }
@@ -26,7 +27,7 @@ export async function POST(req: Request) {
     if (body.isPinned) {
       await db
         .update(posts)
-        .set({ isPinned: true, pinnedAt: new Date() })
+        .set({ isPinned: true })
         .where(eq(posts.id, post.id));
     }
 
