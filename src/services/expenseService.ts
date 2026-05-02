@@ -1,6 +1,6 @@
 import { db } from "@/lib/db/client";
 import { expenses, vehicles } from "@/lib/db/schema";
-import { eq, desc, and, sql, lte } from "drizzle-orm";
+import { eq, desc, and, sql, lte, gte } from "drizzle-orm";
 import { vehicleService } from "@/services/vehicleService";
 import type { CreateExpenseInput, UpdateExpenseInput } from "@/lib/validations/expense";
 import { NotFoundError, ForbiddenError } from "@/lib/errors";
@@ -204,5 +204,30 @@ export const expenseService = {
       where: and(eq(expenses.tripId, tripId), eq(expenses.userId, userId)),
     });
     return row ? mapExpense(row) : null;
+  },
+
+  async listByVehicleAndRange(
+    vehicleId: string,
+    userId: string,
+    from?: string,
+    to?: string
+  ): Promise<Expense[]> {
+    const conditions = [eq(expenses.vehicleId, vehicleId), eq(expenses.userId, userId)];
+    if (from) conditions.push(gte(expenses.date, from));
+    if (to) conditions.push(lte(expenses.date, to));
+
+    const rows = await db
+      .select()
+      .from(expenses)
+      .where(and(...conditions));
+    return rows.map(mapExpense);
+  },
+
+  async listByUserAndRange(userId: string, from: string, to: string): Promise<Expense[]> {
+    const rows = await db
+      .select()
+      .from(expenses)
+      .where(and(eq(expenses.userId, userId), gte(expenses.date, from), lte(expenses.date, to)));
+    return rows.map(mapExpense);
   },
 };

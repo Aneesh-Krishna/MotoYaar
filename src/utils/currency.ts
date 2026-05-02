@@ -10,9 +10,9 @@ export const CURRENCIES = [
 // Approximate exchange rates relative to INR
 const RATES_TO_INR: Record<string, number> = {
   INR: 1,
-  USD: 83.5,
+  USD: 1 / 0.012,
   EUR: 90.5,
-  GBP: 105.0,
+  GBP: 1 / 0.0095,
   AED: 22.7,
   SGD: 62.0,
 };

@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { ChevronRight } from "lucide-react";
 import { toast } from "sonner";
@@ -95,7 +94,6 @@ function DeleteAccountAction() {
   const [isOpen, setIsOpen] = useState(false);
   const [confirmText, setConfirmText] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
-  const router = useRouter();
 
   const handleDelete = async () => {
     if (confirmText !== "DELETE") return;
@@ -104,7 +102,7 @@ function DeleteAccountAction() {
       const res = await fetch("/api/users/me/delete", { method: "POST" });
       if (res.ok) {
         await signOut({ redirect: false });
-        router.push("/login?message=deleted");
+        window.location.assign("/login?message=deleted");
       } else {
         throw new Error("Request failed");
       }

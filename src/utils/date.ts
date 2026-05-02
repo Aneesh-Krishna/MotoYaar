@@ -1,7 +1,14 @@
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
 export function formatDate(date: string | Date | null | undefined): string {
   if (date == null) return "";
   const d = typeof date === "string" ? new Date(date) : date;
-  return d.toLocaleDateString("en-IN", { month: "short", day: "numeric", year: "numeric" });
+  const day = d.getDate();
+  const mon = MONTHS[d.getMonth()];
+  const yr = d.getFullYear();
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  return `${day} ${mon} ${yr}, ${hh}:${mm}`;
 }
 
 export function formatRelativeTime(date: string | Date | null | undefined): string {
@@ -10,38 +17,31 @@ export function formatRelativeTime(date: string | Date | null | undefined): stri
   const diff = Date.now() - d.getTime();
   const minutes = Math.floor(diff / 60000);
   if (minutes < 1) return "just now";
-  if (minutes < 60) return `${minutes}m ago`;
+  if (minutes === 1) return "1 minute ago";
+  if (minutes < 60) return `${minutes} minutes ago`;
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
+  if (hours === 1) return "1 hour ago";
+  if (hours < 24) return `${hours} hours ago`;
   const days = Math.floor(hours / 24);
-  if (days < 7) return `${days}d ago`;
-  return formatDate(d);
+  if (days < 7) return `${days} day${days === 1 ? "" : "s"} ago`;
+  const weeks = Math.floor(days / 7);
+  return `${weeks} week${weeks === 1 ? "" : "s"} ago`;
 }
 
 export function formatTripDateRange(startDate: string, endDate?: string | null): string {
-  const start = new Date(startDate);
-  const startStr = start.toLocaleDateString("en-IN", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
+  const s = new Date(startDate);
+  const sDay = s.getDate();
+  const sMon = MONTHS[s.getMonth()];
+  const sYear = s.getFullYear();
 
-  if (!endDate) return startStr;
+  if (!endDate) return `${sDay} ${sMon} ${sYear}`;
 
-  const end = new Date(endDate);
-  const endStr = end.toLocaleDateString("en-IN", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
+  const e = new Date(endDate);
+  const eDay = e.getDate();
+  const eMon = MONTHS[e.getMonth()];
+  const eYear = e.getFullYear();
 
-  // If same day, just show once
-  if (startStr === endStr) return startStr;
-
-  // If same month/year, show as "Jan 1–3, 2026"
-  if (start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear()) {
-    return `${start.toLocaleDateString("en-IN", { month: "short", day: "numeric" })}–${endStr}`;
-  }
-
-  return `${startStr} – ${endStr}`;
+  if (sDay === eDay && sMon === eMon && sYear === eYear) return `${sDay} ${sMon} ${eYear}`;
+  if (s.getMonth() === e.getMonth() && sYear === eYear) return `${sDay}–${eDay} ${eMon} ${eYear}`;
+  return `${sDay} ${sMon}–${eDay} ${eMon} ${eYear}`;
 }
