@@ -1,6 +1,6 @@
 import { db } from "@/lib/db/client";
-import { documents } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { documents, users } from "@/lib/db/schema";
+import { eq, isNotNull } from "drizzle-orm";
 import { emailService, type ExpiringDoc } from "@/services/emailService";
 import { notificationService } from "@/services/notificationService";
 import { pushService } from "@/services/pushService";
@@ -26,8 +26,11 @@ function localDateString(): string {
 
 export const cronService = {
   async runDocumentExpiryCheck(): Promise<CronResult> {
-    const allDocs = await db.query.documents.findMany();
-    const allUsers = await db.query.users.findMany();
+    // Only load docs that have an expiry date — skip storage-only docs entirely
+    const [allDocs, allUsers] = await Promise.all([
+      db.query.documents.findMany({ where: isNotNull(documents.expiryDate) }),
+      db.query.users.findMany(),
+    ]);
 
     const userMap = new Map(allUsers.map((u) => [u.id, u]));
     const userNotifyMap = new Map<string, NotifyEntry[]>();

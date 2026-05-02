@@ -1,6 +1,6 @@
 import { getSession } from "@/lib/session";
 import { handleApiError } from "@/lib/errors";
-import { reportService } from "@/services/reportService";
+import { getCachedOverallReport } from "@/lib/cache";
 import { NextResponse } from "next/server";
 import type { OverallReportFilter } from "@/types";
 
@@ -24,7 +24,7 @@ export async function GET(req: Request) {
       compFrom: searchParams.get("compFrom") ?? undefined,
       compTo: searchParams.get("compTo") ?? undefined,
     };
-    const report = await reportService.getOverallReport(session.user.id, filter);
+    const report = await getCachedOverallReport(session.user.id, filter);
     return NextResponse.json(report);
   } catch (error) {
     return handleApiError(error);
