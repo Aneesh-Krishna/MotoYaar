@@ -33,7 +33,6 @@ type RawPost = {
   isEdited: boolean;
   editHistory: unknown;
   isPinned: boolean;
-  pinnedAt: Date | null;
   isHidden: boolean;
   score: number;
   createdAt: Date;
@@ -105,7 +104,7 @@ export const communityService = {
   ): Promise<{ posts: FeedPost[]; hasMore: boolean }> {
     const pinnedPosts = (await db.query.posts.findMany({
       where: eq(posts.isPinned, true),
-      orderBy: [desc(posts.pinnedAt)],
+      orderBy: [desc(posts.createdAt)],
       with: { user: true, reactions: true, comments: true } as never,
     })) as unknown as RawPost[];
 
@@ -381,6 +380,35 @@ export const communityService = {
       author: undefined,
       replies: [],
     };
+  },
+
+  async getComments(postId: string): Promise<Comment[]> {
+    const rawComments = (await db.query.comments.findMany({
+      where: eq(comments.postId, postId),
+      with: { user: true, replies: { with: { user: true } } },
+    } as never)) as unknown as RawComment[];
+
+    return rawComments
+      .filter((c) => !c.parentCommentId)
+      .map((c) => ({
+        id: c.id,
+        postId: c.postId,
+        userId: c.userId,
+        parentCommentId: c.parentCommentId ?? undefined,
+        content: c.content,
+        createdAt: c.createdAt instanceof Date ? c.createdAt.toISOString() : String(c.createdAt),
+        author: mapAuthor(c.user),
+        replies: (c.replies ?? []).map((r) => ({
+          id: r.id,
+          postId: r.postId,
+          userId: r.userId,
+          parentCommentId: r.parentCommentId ?? undefined,
+          content: r.content,
+          createdAt: r.createdAt instanceof Date ? r.createdAt.toISOString() : String(r.createdAt),
+          author: mapAuthor(r.user),
+          replies: [],
+        })),
+      }));
   },
 
   async deleteComment(commentId: string, userId: string): Promise<void> {

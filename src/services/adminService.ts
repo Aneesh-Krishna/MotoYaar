@@ -337,7 +337,7 @@ export const adminService = {
       GROUP BY 1
       ORDER BY 1
     `);
-    return (rows as Array<{ week: string; count: string | number }>).map((r) => ({
+    return (rows as unknown as Array<{ week: string; count: string | number }>).map((r) => ({
       week: r.week,
       count: Number(r.count),
     }));
