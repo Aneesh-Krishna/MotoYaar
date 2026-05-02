@@ -12,12 +12,11 @@ export default async function DrivingLicencePage() {
   const session = await getSession();
   if (!session) redirect("/login");
 
-  const [dlDocuments, dbUser] = await Promise.all([
-    documentService.listUserDocuments(session.user.id),
+  const [dlDoc, dbUser] = await Promise.all([
+    documentService.getUserDocumentByType(session.user.id, "DL"),
     db.query.users.findFirst({ where: eq(users.id, session.user.id) }),
   ]);
 
-  const dlDoc = dlDocuments.find((d) => d.type === "DL") ?? null;
   const storagePreference =
     (dbUser?.documentStoragePreference as "parse_only" | "full_storage") ?? "parse_only";
 

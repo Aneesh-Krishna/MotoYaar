@@ -9,6 +9,7 @@ import {
   numeric,
   doublePrecision,
   jsonb,
+  varchar,
   index,
   uniqueIndex,
   check,
@@ -21,6 +22,7 @@ export const users = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     googleId: text("google_id").unique().notNull(),
+    email: text("email"),
     name: text("name").notNull(),
     username: text("username").unique(),
     bio: text("bio"),
@@ -32,6 +34,7 @@ export const users = pgTable(
       .notNull()
       .default("parse_only"),
     pushNotificationsEnabled: boolean("push_notifications_enabled").notNull().default(true),
+    emailNotificationsEnabled: boolean("email_notifications_enabled").notNull().default(true),
     walkthroughSeen: boolean("walkthrough_seen").notNull().default(false),
     status: text("status").notNull().default("active"),
     suspendedUntil: timestamp("suspended_until", { withTimezone: true }),
@@ -136,6 +139,7 @@ export const trips = pgTable(
     mapsLink: text("maps_link"),
     timeTaken: text("time_taken"),
     breakdown: jsonb("breakdown").notNull().default([]),
+    hasLiveRoute: boolean("has_live_route").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
@@ -161,6 +165,7 @@ export const expenses = pgTable(
     whereText: text("where_text"),
     comment: text("comment"),
     receiptUrl: text("receipt_url"),
+    receiptKey: text("receipt_key"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
@@ -421,6 +426,7 @@ export const aiReports = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     status: text("status").notNull().default("pending"),
     periodLabel: text("period_label"),
+    expenseSnapshot: jsonb("expense_snapshot"),
     content: text("content"),
     requestedAt: timestamp("requested_at", { withTimezone: true }).notNull().defaultNow(),
     completedAt: timestamp("completed_at", { withTimezone: true }),
@@ -431,6 +437,63 @@ export const aiReports = pgTable(
     statusCheck: check(
       "ai_reports_status_check",
       sql`${table.status} IN ('pending', 'generating', 'ready', 'failed')`
+    ),
+  })
+);
+
+// ─── trip_routes ──────────────────────────────────────────────────────────────
+export const tripRoutes = pgTable(
+  "trip_routes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tripId: uuid("trip_id").notNull().references(() => trips.id, { onDelete: "cascade" }),
+    waypoints: jsonb("waypoints").notNull().default([]),
+    distanceKm: numeric("distance_km", { precision: 8, scale: 3 }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    tripIdIdx: index("idx_trip_routes_trip_id").on(table.tripId),
+    uniqueRoutePerTrip: uniqueIndex("unique_route_per_trip").on(table.tripId),
+  })
+);
+
+// ─── live_trip_sessions ───────────────────────────────────────────────────────
+export const liveTripSessions = pgTable(
+  "live_trip_sessions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tripId: uuid("trip_id").notNull().references(() => trips.id, { onDelete: "cascade" }),
+    hostUserId: uuid("host_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    inviteCode: varchar("invite_code", { length: 6 }).notNull().unique(),
+    status: varchar("status", { length: 20 }).notNull().default("active"),
+    guestViewCount: integer("guest_view_count").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    endedAt: timestamp("ended_at", { withTimezone: true }),
+  },
+  (table) => ({
+    tripIdIdx: index("idx_live_sessions_trip_id").on(table.tripId),
+    inviteCodeIdx: index("idx_live_sessions_invite_code").on(table.inviteCode),
+  })
+);
+
+// ─── live_trip_participants ───────────────────────────────────────────────────
+export const liveTripParticipants = pgTable(
+  "live_trip_participants",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sessionId: uuid("session_id").notNull().references(() => liveTripSessions.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    status: varchar("status", { length: 20 }).notNull().default("active"),
+    joinedAt: timestamp("joined_at", { withTimezone: true }).notNull().defaultNow(),
+    leftAt: timestamp("left_at", { withTimezone: true }),
+  },
+  (table) => ({
+    sessionIdIdx: index("idx_live_participants_session_id").on(table.sessionId),
+    userIdIdx: index("idx_live_participants_user_id").on(table.userId),
+    uniqueParticipantPerSession: uniqueIndex("unique_participant_per_session").on(
+      table.sessionId,
+      table.userId
     ),
   })
 );

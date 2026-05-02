@@ -47,6 +47,7 @@ export const authOptions: NextAuthOptions = {
       if (token.userId) session.user.id = token.userId as string;
       if (token.username !== undefined) session.user.username = token.username as string | null;
       if (token.walkthroughSeen !== undefined) session.user.walkthroughSeen = token.walkthroughSeen as boolean;
+      session.user.currency = (token.currency as string) ?? "INR";
       return session;
     },
     async jwt({ token, account, trigger }) {
@@ -60,6 +61,7 @@ export const authOptions: NextAuthOptions = {
           token.username = dbUser.username ?? undefined;
           token.userId = dbUser.id;
           token.walkthroughSeen = dbUser.walkthroughSeen;
+          token.currency = dbUser.currency ?? "INR";
         }
       }
 

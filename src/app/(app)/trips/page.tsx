@@ -1,57 +1,25 @@
 import Link from "next/link";
 import { Plus, MapPin } from "lucide-react";
+import { getSession } from "@/lib/session";
+import { redirect } from "next/navigation";
+import { tripService } from "@/services/tripService";
 import { TripCard } from "@/components/ui/TripCard";
 import { EmptyState } from "@/components/ui/EmptyState";
-import type { Trip } from "@/types";
+import { ResumeTripBanner } from "@/components/map/ResumeTripBanner";
+import { StartLiveTripSheetWrapper } from "@/components/trips/StartLiveTripSheetWrapper";
 
-// ─── Mock data ────────────────────────────────────────────────────────────────
+export default async function TripsPage() {
+  const session = await getSession();
+  if (!session) redirect("/login");
 
-const MOCK_TRIPS: Trip[] = [
-  {
-    id: "t1",
-    userId: "u1",
-    vehicleId: "v1",
-    title: "Pune to Mumbai Weekend Run",
-    description: "Quick getaway with the Meteor.",
-    startDate: "2026-03-10",
-    endDate: "2026-03-11",
-    routeText: "Pune → Expressway → Mumbai",
-    timeTaken: "3h 20min",
-    breakdown: [
-      { category: "Fuel", amount: 450 },
-      { category: "Food", amount: 350 },
-    ],
-    totalCost: 800,
-    createdAt: "2026-03-10",
-    vehicle: { id: "v1", name: "Royal Enfield Meteor", registrationNumber: "MH02AB1234" },
-  },
-  {
-    id: "t2",
-    userId: "u1",
-    vehicleId: "v2",
-    title: "Family Trip to Lonavala",
-    startDate: "2026-02-22",
-    routeText: "Mumbai → Lonavala",
-    timeTaken: "2h",
-    breakdown: [
-      { category: "Fuel", amount: 600 },
-      { category: "Stay", amount: 2500 },
-      { category: "Food", amount: 900 },
-    ],
-    totalCost: 4000,
-    createdAt: "2026-02-22",
-    vehicle: { id: "v2", name: "Maruti Swift", registrationNumber: "MH02CD5678" },
-  },
-];
-
-// ─── Page ─────────────────────────────────────────────────────────────────────
-
-export default function TripsPage() {
-  const isEmpty = MOCK_TRIPS.length === 0;
+  const trips = await tripService.listByUser(session.user.id);
+  const isEmpty = trips.length === 0;
 
   return (
     <>
       <div className="px-screen-x py-5 max-w-screen-xl mx-auto lg:px-screen-x-md">
+        <ResumeTripBanner />
+
         {isEmpty ? (
           <EmptyState
             icon={<MapPin size={56} />}
@@ -69,7 +37,7 @@ export default function TripsPage() {
           />
         ) : (
           <ul className="space-y-3" aria-label="Your trips">
-            {MOCK_TRIPS.map((trip) => (
+            {trips.map((trip) => (
               <li key={trip.id}>
                 <TripCard trip={trip} />
               </li>
@@ -78,7 +46,8 @@ export default function TripsPage() {
         )}
       </div>
 
-      {/* FAB */}
+      {!isEmpty && <StartLiveTripSheetWrapper />}
+
       {!isEmpty && (
         <Link
           href="/trips/new"

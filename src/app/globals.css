@@ -101,3 +101,24 @@
     display: none;
   }
 }
+
+/* ─── Live Trip Map ───────────────────────────────────────────────────────── */
+.pulsing-dot {
+  width: 14px;
+  height: 14px;
+  background: #3B82F6;
+  border-radius: 50%;
+  border: 2px solid white;
+  box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.6);
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0%   { box-shadow: 0 0 0 0   rgba(59, 130, 246, 0.6); }
+  70%  { box-shadow: 0 0 0 10px rgba(59, 130, 246, 0);   }
+  100% { box-shadow: 0 0 0 0   rgba(59, 130, 246, 0);   }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulsing-dot { animation: none; }
+}

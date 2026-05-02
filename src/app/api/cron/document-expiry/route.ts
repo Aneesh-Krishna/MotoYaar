@@ -1,16 +1,14 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import { cronService } from "@/services/cronService";
 
-// TODO: Implement full cron logic in Story 8.1
-export async function GET(req: NextRequest) {
+export async function GET(req: Request) {
+  const cronSecret = process.env.CRON_SECRET;
   const authHeader = req.headers.get("authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+
+  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  return NextResponse.json({
-    message: "Cron stub — not yet implemented",
-    processed: 0,
-    notified: 0,
-    deleted: 0,
-  });
+  const result = await cronService.runDocumentExpiryCheck();
+  return NextResponse.json(result);
 }

@@ -9,6 +9,7 @@ declare module "next-auth" {
       image?: string | null;
       username: string | null;
       walkthroughSeen: boolean;
+      currency: string;
     };
   }
 }
@@ -18,5 +19,6 @@ declare module "next-auth/jwt" {
     username?: string;
     userId?: string;
     walkthroughSeen?: boolean;
+    currency?: string;
   }
 }
