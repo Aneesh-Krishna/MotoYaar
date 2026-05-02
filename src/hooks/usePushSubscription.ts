@@ -30,11 +30,7 @@ export function usePushSubscription(): UsePushSubscriptionResult {
   const [isSubscribing, setIsSubscribing] = useState(false);
 
   useEffect(() => {
-    if (
-      typeof window === "undefined" ||
-      !("Notification" in window) ||
-      !("serviceWorker" in navigator)
-    ) {
+    if (typeof window === "undefined" || !("Notification" in window)) {
       setPermissionState("unsupported");
       return;
     }
@@ -43,6 +39,7 @@ export function usePushSubscription(): UsePushSubscriptionResult {
 
   const subscribe = async (): Promise<boolean> => {
     if (permissionState === "unsupported") return false;
+    if (!("serviceWorker" in navigator)) return false;
 
     setIsSubscribing(true);
     try {

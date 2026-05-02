@@ -22,6 +22,7 @@ export const users = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     googleId: text("google_id").unique().notNull(),
+    email: text("email"),
     name: text("name").notNull(),
     username: text("username").unique(),
     bio: text("bio"),
@@ -425,6 +426,7 @@ export const aiReports = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     status: text("status").notNull().default("pending"),
     periodLabel: text("period_label"),
+    expenseSnapshot: jsonb("expense_snapshot"),
     content: text("content"),
     requestedAt: timestamp("requested_at", { withTimezone: true }).notNull().defaultNow(),
     completedAt: timestamp("completed_at", { withTimezone: true }),

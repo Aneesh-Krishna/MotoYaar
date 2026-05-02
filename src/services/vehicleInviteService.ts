@@ -37,8 +37,13 @@ export const vehicleInviteService = {
     // Ownership check — throws ForbiddenError if not the owner
     const vehicle = await vehicleService.getByIdOwnerOnly(vehicleId, ownerUserId);
 
-    // Self-invite check is skipped — users table has no email column (Google OAuth only)
-    void userService.getById(ownerUserId);
+    // Self-invite check
+    const owner = await userService.getById(ownerUserId);
+    if (!owner.email) {
+      logger.warn({ ownerUserId }, "createInvite: self-invite check skipped — owner has no email");
+    } else if (owner.email.toLowerCase() === inviteeEmail.toLowerCase()) {
+      throw new BadRequestError("You cannot invite yourself");
+    }
 
     const existing = await db.query.vehicleInvites.findFirst({
       where: and(
@@ -120,8 +125,14 @@ export const vehicleInviteService = {
       throw new ConflictError("This invite has expired. Ask the vehicle owner to send a new one.");
     }
 
-    // Email verification skipped — users table has no email column (Google OAuth only)
-    // Token possession is sufficient proof of invite ownership
+    // Email verification — accepting user must own the invited email address
+    const acceptingUser = await db.query.users.findFirst({ where: eq(users.id, userId) });
+    if (!acceptingUser?.email) {
+      throw new ForbiddenError("Your account has no email address associated with it");
+    }
+    if (acceptingUser.email.toLowerCase() !== invite.inviteeEmail.toLowerCase()) {
+      throw new ForbiddenError("This invite was sent to a different email address");
+    }
 
     await db
       .insert(vehicleAccess)
