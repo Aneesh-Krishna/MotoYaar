@@ -173,6 +173,8 @@ export const expenses = pgTable(
     userIdIdx: index("idx_expenses_user_id").on(table.userId),
     tripIdIdx: index("idx_expenses_trip_id").on(table.tripId),
     dateIdx: index("idx_expenses_date").on(table.date),
+    // Composite index for range report queries: listByUserAndRange filters on (userId, date)
+    userIdDateIdx: index("idx_expenses_user_id_date").on(table.userId, table.date),
     reasonCheck: check(
       "expenses_reason_check",
       sql`${table.reason} IN ('Service', 'Fuel', 'Trip', 'Others')`

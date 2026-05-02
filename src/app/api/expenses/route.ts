@@ -24,6 +24,7 @@ export async function POST(req: Request) {
     const expense = await expenseService.create(session.user.id, undefined, data);
     revalidateTag(CACHE_TAGS.expenses(session.user.id));
     revalidateTag(CACHE_TAGS.vehicles(session.user.id));
+    revalidateTag(CACHE_TAGS.reports(session.user.id));
     return NextResponse.json(expense, { status: 201 });
   } catch (error) {
     return handleApiError(error);
