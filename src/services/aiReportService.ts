@@ -9,23 +9,36 @@ import { userService } from "@/services/userService";
 import { sendEmail } from "@/lib/resend";
 import { sendPushNotification, type StoredPushSubscription } from "@/lib/push";
 import { logger } from "@/lib/logger";
-import type { ExpenseSnapshot } from "@/types";
+import type { AiReport, ExpenseSnapshot } from "@/types";
+
+function mapAiReport(row: typeof aiReports.$inferSelect): AiReport {
+  return {
+    id: row.id,
+    userId: row.userId,
+    status: row.status as AiReport["status"],
+    periodLabel: row.periodLabel ?? undefined,
+    content: row.content ?? undefined,
+    requestedAt: row.requestedAt instanceof Date ? row.requestedAt.toISOString() : String(row.requestedAt),
+    completedAt: row.completedAt instanceof Date ? row.completedAt.toISOString() : row.completedAt ?? undefined,
+  };
+}
 
 export const FREE_REPORTS_PER_MONTH = 1;
 
 export const aiReportService = {
-  async listByUser(userId: string) {
-    return db.query.aiReports.findMany({
+  async listByUser(userId: string): Promise<AiReport[]> {
+    const rows = await db.query.aiReports.findMany({
       where: eq(aiReports.userId, userId),
       orderBy: desc(aiReports.requestedAt),
     });
+    return rows.map(mapAiReport);
   },
 
-  async getById(reportId: string, userId: string) {
+  async getById(reportId: string, userId: string): Promise<AiReport> {
     const row = await db.query.aiReports.findFirst({ where: eq(aiReports.id, reportId) });
     if (!row) throw new NotFoundError("Report not found");
     if (row.userId !== userId) throw new ForbiddenError("You do not have access to this report");
-    return row;
+    return mapAiReport(row);
   },
 
   async checkQuota(userId: string): Promise<{ allowed: boolean; usedThisMonth: number; freePerMonth: number }> {

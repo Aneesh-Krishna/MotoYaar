@@ -280,7 +280,10 @@ describe("aiReportService.getById", () => {
 
     const result = await aiReportService.getById(REPORT_ID, USER_ID);
 
-    expect(result).toEqual(report);
+    expect(result.id).toBe(report.id);
+    expect(result.userId).toBe(report.userId);
+    expect(result.status).toBe(report.status);
+    expect(result.periodLabel).toBe(report.periodLabel);
     expect(mockFindFirst).toHaveBeenCalledOnce();
   });
 

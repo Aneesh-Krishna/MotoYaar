@@ -14,7 +14,7 @@ export async function DELETE(_req: Request, { params }: { params: { accessId: st
       userId: result.revokedUserId,
       type: "access_revoked",
       message: `Your access to ${result.vehicleName} has been removed by the owner.`,
-      referenceId: "/garage",
+      actionUrl: "/garage",
     }).catch(() => {});
     return NextResponse.json({ ok: true });
   } catch (error) {
