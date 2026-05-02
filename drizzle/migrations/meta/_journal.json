@@ -99,6 +99,13 @@
       "when": 1777392960000,
       "tag": "0013_guest_view_counter",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1746172800000,
+      "tag": "0014_performance_indexes",
+      "breakpoints": true
     }
   ]
 }

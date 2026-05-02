@@ -1,6 +1,6 @@
 import { getSession } from "@/lib/session";
 import { handleApiError } from "@/lib/errors";
-import { reportService } from "@/services/reportService";
+import { getCachedVehicleReport } from "@/lib/cache";
 import { NextResponse } from "next/server";
 
 export async function GET(req: Request, { params }: { params: { id: string } }) {
@@ -13,7 +13,7 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
     const from = searchParams.get("from") ?? undefined;
     const to = searchParams.get("to") ?? undefined;
 
-    const report = await reportService.getVehicleReport(params.id, session.user.id, {
+    const report = await getCachedVehicleReport(params.id, session.user.id, {
       filter,
       from,
       to,

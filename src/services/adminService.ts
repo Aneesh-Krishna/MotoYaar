@@ -146,17 +146,13 @@ export const adminService = {
   },
 
   async getUser(userId: string): Promise<AdminUser> {
-    const user = await db.query.users.findFirst({ where: eq(users.id, userId) });
-    if (!user) throw new NotFoundError("User not found");
+    const [user, vehicleCountRows, postCountRows] = await Promise.all([
+      db.query.users.findFirst({ where: eq(users.id, userId) }),
+      db.select({ count: sql<string>`count(*)` }).from(vehicles).where(eq(vehicles.userId, userId)),
+      db.select({ count: sql<string>`count(*)` }).from(posts).where(eq(posts.userId, userId)),
+    ]);
 
-    const vehicleCountRows = await db
-      .select({ count: sql<string>`count(*)` })
-      .from(vehicles)
-      .where(eq(vehicles.userId, userId));
-    const postCountRows = await db
-      .select({ count: sql<string>`count(*)` })
-      .from(posts)
-      .where(eq(posts.userId, userId));
+    if (!user) throw new NotFoundError("User not found");
 
     return {
       id: user.id,

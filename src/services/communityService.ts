@@ -1,6 +1,6 @@
 import { db } from "@/lib/db/client";
-import { posts, postReactions, comments, postReports, adminSettings } from "@/lib/db/schema";
-import { eq, desc, and, sql, ilike, or, gte } from "drizzle-orm";
+import { posts, postReactions, comments, postReports, adminSettings, users } from "@/lib/db/schema";
+import { eq, desc, and, sql, ilike, or, gte, type SQL } from "drizzle-orm";
 import { NotFoundError, ForbiddenError, BadRequestError, ConflictError } from "@/lib/errors";
 import type { FeedPost, Comment, PostDetail } from "@/types";
 import type { CreatePostInput } from "@/lib/validations/post";
@@ -80,18 +80,54 @@ function mapRawPost(row: RawPost, currentUserId?: string): FeedPost {
   };
 }
 
-function sortPosts(rows: RawPost[], sort: "trending" | "newest"): RawPost[] {
-  if (sort === "newest") {
-    return [...rows].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-  }
-  return [...rows].sort((a, b) => {
-    const reactions = (r: RawPost) => r.reactions ?? [];
-    const aLikes = reactions(a).filter((r) => r.type === "like").length;
-    const aDislikes = reactions(a).filter((r) => r.type === "dislike").length;
-    const bLikes = reactions(b).filter((r) => r.type === "like").length;
-    const bDislikes = reactions(b).filter((r) => r.type === "dislike").length;
-    return hotScore(bLikes, bDislikes, b.createdAt) - hotScore(aLikes, aDislikes, a.createdAt);
-  });
+type PostSelectRow = {
+  id: string;
+  userId: string;
+  title: string;
+  description: string;
+  images: string[] | null;
+  links: string[] | null;
+  tags: string[] | null;
+  isEdited: boolean;
+  isPinned: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+  likes: number;
+  dislikes: number;
+  commentCount: number;
+  userReaction: string | null;
+  authorId: string | null;
+  authorName: string | null;
+  authorUsername: string | null;
+  authorProfileImageUrl: string | null;
+};
+
+function mapSelectToFeedPost(row: PostSelectRow): FeedPost {
+  return {
+    id: row.id,
+    userId: row.userId,
+    title: row.title,
+    description: row.description,
+    images: row.images ?? [],
+    links: row.links ?? [],
+    tags: row.tags ?? [],
+    edited: row.isEdited,
+    isPinned: row.isPinned,
+    createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),
+    updatedAt: row.updatedAt instanceof Date ? row.updatedAt.toISOString() : String(row.updatedAt),
+    author: row.authorId
+      ? {
+          id: row.authorId,
+          name: row.authorName!,
+          username: row.authorUsername,
+          profileImageUrl: row.authorProfileImageUrl ?? undefined,
+        }
+      : undefined,
+    likes: row.likes,
+    dislikes: row.dislikes,
+    commentCount: row.commentCount,
+    userReaction: (row.userReaction as FeedPost["userReaction"]) ?? undefined,
+  };
 }
 
 export const communityService = {
@@ -102,44 +138,67 @@ export const communityService = {
     currentUserId?: string,
     q?: string
   ): Promise<{ posts: FeedPost[]; hasMore: boolean }> {
-    const pinnedPosts = (await db.query.posts.findMany({
-      where: eq(posts.isPinned, true),
-      orderBy: [desc(posts.createdAt)],
-      with: { user: true, reactions: true, comments: true } as never,
-    })) as unknown as RawPost[];
-
-    const conditions = [eq(posts.isHidden, false), eq(posts.isPinned, false)];
-    if (tag) conditions.push(sql`${posts.tags} @> ARRAY[${tag}]::text[]` as never);
-    if (q) {
-      conditions.push(
-        or(ilike(posts.title, `%${q}%`), ilike(posts.description, `%${q}%`))! as never
-      );
-    }
-
-    const regularRaw = (await db.query.posts.findMany({
-      where: and(...conditions),
-      with: { user: true, reactions: true, comments: true } as never,
-    })) as unknown as RawPost[];
-
-    let regularPosts = sortPosts(regularRaw, sort);
-
-    if (q) {
-      const ql = q.toLowerCase();
-      regularPosts = regularPosts.sort((a, b) => {
-        const aTitle = a.title.toLowerCase().includes(ql);
-        const bTitle = b.title.toLowerCase().includes(ql);
-        if (aTitle !== bTitle) return aTitle ? -1 : 1;
-        return 0;
-      });
-    }
-
-    const combined = [...pinnedPosts, ...regularPosts];
     const offset = (page - 1) * PAGE_SIZE;
-    const pageRows = combined.slice(offset, offset + PAGE_SIZE);
-    const hasMore = combined.length > offset + PAGE_SIZE;
+
+    // Correlated subqueries with indexed foreign keys — fast for small page sizes
+    const userReactionSql: SQL<string | null> = currentUserId
+      ? sql<string | null>`(SELECT type FROM post_reactions pr WHERE pr.post_id = ${posts.id} AND pr.user_id = ${currentUserId} LIMIT 1)`
+      : sql<string | null>`NULL::text`;
+
+    const selectFields = {
+      id: posts.id,
+      userId: posts.userId,
+      title: posts.title,
+      description: posts.description,
+      images: posts.images,
+      links: posts.links,
+      tags: posts.tags,
+      isEdited: posts.isEdited,
+      isPinned: posts.isPinned,
+      createdAt: posts.createdAt,
+      updatedAt: posts.updatedAt,
+      likes: sql<number>`(SELECT COUNT(*)::int FROM post_reactions pr WHERE pr.post_id = ${posts.id} AND pr.type = 'like')`,
+      dislikes: sql<number>`(SELECT COUNT(*)::int FROM post_reactions pr WHERE pr.post_id = ${posts.id} AND pr.type = 'dislike')`,
+      commentCount: sql<number>`(SELECT COUNT(*)::int FROM comments c WHERE c.post_id = ${posts.id})`,
+      userReaction: userReactionSql,
+      authorId: users.id,
+      authorName: users.name,
+      authorUsername: users.username,
+      authorProfileImageUrl: users.profileImageUrl,
+    };
+
+    const regularConditions: SQL[] = [eq(posts.isHidden, false), eq(posts.isPinned, false)];
+    if (tag) regularConditions.push(sql`${posts.tags} @> ARRAY[${tag}]::text[]`);
+    if (q) regularConditions.push(or(ilike(posts.title, `%${q}%`), ilike(posts.description, `%${q}%`))!);
+
+    const orderBy = sort === "newest"
+      ? [desc(posts.createdAt)]
+      : [desc(posts.score), desc(posts.createdAt)];
+
+    const [pinnedRows, regularRows] = await Promise.all([
+      db.select(selectFields)
+        .from(posts)
+        .leftJoin(users, eq(posts.userId, users.id))
+        .where(eq(posts.isPinned, true))
+        .orderBy(desc(posts.createdAt)),
+      db.select(selectFields)
+        .from(posts)
+        .leftJoin(users, eq(posts.userId, users.id))
+        .where(and(...regularConditions))
+        .orderBy(...orderBy)
+        .limit(PAGE_SIZE + 1)
+        .offset(offset),
+    ]);
+
+    const hasMore = regularRows.length > PAGE_SIZE;
+    const regularPage = regularRows.slice(0, PAGE_SIZE) as unknown as PostSelectRow[];
+    const allRows: PostSelectRow[] =
+      page === 1
+        ? [...(pinnedRows as unknown as PostSelectRow[]), ...regularPage]
+        : regularPage;
 
     return {
-      posts: pageRows.map((r) => mapRawPost(r, currentUserId)),
+      posts: allRows.map(mapSelectToFeedPost),
       hasMore,
     };
   },
@@ -334,20 +393,27 @@ export const communityService = {
         .onConflictDoUpdate({ target: postReactions.id, set: { type } });
     }
 
-    const allReactions = await db.query.postReactions.findMany({
-      where: eq(postReactions.postId, postId),
-    });
+    // Use aggregation instead of loading all reactions
+    const [counts, userReactionRow] = await Promise.all([
+      db
+        .select({ type: postReactions.type, count: sql<number>`COUNT(*)::int` })
+        .from(postReactions)
+        .where(eq(postReactions.postId, postId))
+        .groupBy(postReactions.type),
+      db.query.postReactions.findFirst({
+        where: and(eq(postReactions.postId, postId), eq(postReactions.userId, userId)),
+        columns: { type: true },
+      }),
+    ]);
 
-    let likes = 0;
-    let dislikes = 0;
-    for (const r of allReactions) {
-      if (r.type === "like") likes++;
-      else dislikes++;
-    }
+    const likes = counts.find((c) => c.type === "like")?.count ?? 0;
+    const dislikes = counts.find((c) => c.type === "dislike")?.count ?? 0;
 
-    const userReaction = allReactions.find((r) => r.userId === userId)?.type;
+    // Persist hot score so trending sort works at DB level
+    const newScore = hotScore(likes, dislikes, post.createdAt);
+    await db.update(posts).set({ score: newScore }).where(eq(posts.id, postId));
 
-    return { likes, dislikes, userReaction };
+    return { likes, dislikes, userReaction: userReactionRow?.type };
   },
 
   async addComment(
