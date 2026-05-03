@@ -5,7 +5,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { ThumbsUp, ThumbsDown, MessageCircle, Pin, X } from "lucide-react";
 import { cn, timeAgo, truncate } from "@/lib/utils";
-import type { Post } from "@/types";
+import { toast } from "sonner";
+import type { Post, PostReactionType } from "@/types";
 
 interface PostCardProps {
   post: Post;
@@ -16,13 +17,50 @@ interface PostCardProps {
 
 export function PostCard({ post, pinned = false, className, isAuthenticated = true }: PostCardProps) {
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [likes, setLikes] = useState(post.likes);
+  const [dislikes, setDislikes] = useState(post.dislikes);
+  const [userReaction, setUserReaction] = useState<PostReactionType | undefined>(post.userReaction);
   const hasImage = post.images.length > 0;
 
-  const handleReactionClick = () => {
+  async function handleReaction(type: PostReactionType) {
     if (!isAuthenticated) {
       setShowLoginModal(true);
+      return;
     }
-  };
+
+    const prev = { likes, dislikes, userReaction };
+    if (userReaction === type) {
+      if (type === "like") setLikes((l) => l - 1);
+      else setDislikes((d) => d - 1);
+      setUserReaction(undefined);
+    } else if (!userReaction) {
+      if (type === "like") setLikes((l) => l + 1);
+      else setDislikes((d) => d + 1);
+      setUserReaction(type);
+    } else {
+      if (type === "like") { setLikes((l) => l + 1); setDislikes((d) => d - 1); }
+      else { setDislikes((d) => d + 1); setLikes((l) => l - 1); }
+      setUserReaction(type);
+    }
+
+    try {
+      const res = await fetch(`/api/posts/${post.id}/reactions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      const data = await res.json();
+      setLikes(data.likes);
+      setDislikes(data.dislikes);
+      setUserReaction(data.userReaction ?? undefined);
+    } catch {
+      setLikes(prev.likes);
+      setDislikes(prev.dislikes);
+      setUserReaction(prev.userReaction);
+      toast.error("Failed to update reaction");
+    }
+  }
 
   return (
     <>
@@ -125,31 +163,31 @@ export function PostCard({ post, pinned = false, className, isAuthenticated = tr
         {/* Engagement bar */}
         <div className="flex items-center gap-4 px-4 pb-3 border-t border-border pt-2.5">
           <button
-            aria-label={`${post.likes} likes`}
-            onClick={handleReactionClick}
+            aria-label={`${likes} likes`}
+            onClick={(e) => { e.preventDefault(); handleReaction("like"); }}
             className={cn(
               "flex items-center gap-1.5 text-caption",
-              post.userReaction === "like"
+              userReaction === "like"
                 ? "text-primary font-semibold"
                 : "text-foreground-muted hover:text-primary transition-colors"
             )}
           >
             <ThumbsUp size={14} aria-hidden="true" />
-            <span>{post.likes}</span>
+            <span>{likes}</span>
           </button>
 
           <button
-            aria-label={`${post.dislikes} dislikes`}
-            onClick={handleReactionClick}
+            aria-label={`${dislikes} dislikes`}
+            onClick={(e) => { e.preventDefault(); handleReaction("dislike"); }}
             className={cn(
               "flex items-center gap-1.5 text-caption",
-              post.userReaction === "dislike"
+              userReaction === "dislike"
                 ? "text-red-600 font-semibold"
                 : "text-foreground-muted hover:text-red-500 transition-colors"
             )}
           >
             <ThumbsDown size={14} aria-hidden="true" />
-            <span>{post.dislikes}</span>
+            <span>{dislikes}</span>
           </button>
 
           <Link

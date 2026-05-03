@@ -31,7 +31,7 @@ async function uploadPostImage(file: File): Promise<string> {
 
   if (!putRes.ok) throw new Error("Failed to upload image to storage");
 
-  return key;
+  return `${process.env.NEXT_PUBLIC_R2_PUBLIC_URL}/${key}`;
 }
 
 export default function NewPostPage() {

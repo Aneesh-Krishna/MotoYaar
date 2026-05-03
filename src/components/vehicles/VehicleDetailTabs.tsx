@@ -1,6 +1,7 @@
 "use client";
 
-import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { useState } from "react";
+import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { Map } from "lucide-react";
 import { StatusBadge } from "@/components/ui/StatusBadge";
@@ -29,7 +30,7 @@ const TABS = [
 
 export function VehicleDetailTabs({
   vehicle,
-  activeTab,
+  activeTab: initialTab,
   totalSpend,
   lastService,
   nextExpiry,
@@ -37,14 +38,12 @@ export function VehicleDetailTabs({
   documents,
   expenses,
 }: Props) {
-  const router = useRouter();
+  const [activeTab, setActiveTab] = useState(initialTab);
   const pathname = usePathname();
-  const searchParams = useSearchParams();
 
   const handleTabChange = (tabId: string) => {
-    const params = new URLSearchParams(searchParams.toString());
-    params.set("tab", tabId);
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    setActiveTab(tabId);
+    window.history.replaceState(null, "", `${pathname}?tab=${tabId}`);
   };
 
   return (
