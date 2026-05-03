@@ -24,6 +24,7 @@ const {
   makeChain,
   mockAdminFindFirst,
   mockDeleteObject,
+  mockUserFindFirst,
 } = vi.hoisted(() => {
   const mockReturning = vi.fn();
   const mockOnConflictDoUpdate = vi.fn();
@@ -61,6 +62,7 @@ const {
   const mockSelect = vi.fn().mockImplementation(() => makeChain([]));
   const mockAdminFindFirst = vi.fn();
   const mockDeleteObject = vi.fn().mockResolvedValue(undefined);
+  const mockUserFindFirst = vi.fn();
   return {
     mockFindFirst,
     mockFindMany,
@@ -82,6 +84,7 @@ const {
     makeChain,
     mockAdminFindFirst,
     mockDeleteObject,
+    mockUserFindFirst,
   };
 });
 
@@ -102,6 +105,9 @@ vi.mock("@/lib/db/client", () => ({
       },
       adminSettings: {
         findFirst: mockAdminFindFirst,
+      },
+      users: {
+        findFirst: mockUserFindFirst,
       },
     },
     insert: mockInsert,
