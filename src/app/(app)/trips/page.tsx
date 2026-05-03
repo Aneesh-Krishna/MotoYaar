@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus, MapPin } from "lucide-react";
+import { MapPin } from "lucide-react";
 import { getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
 import { tripService } from "@/services/tripService";
@@ -47,20 +47,6 @@ export default async function TripsPage() {
       </div>
 
       {!isEmpty && <StartLiveTripSheetWrapper />}
-
-      {!isEmpty && (
-        <Link
-          href="/trips/new"
-          aria-label="Log a new trip"
-          className="fixed right-4 bottom-[calc(4rem+env(safe-area-inset-bottom)+1rem)] z-30 lg:hidden
-                     w-14 h-14 bg-primary text-white rounded-full shadow-lg
-                     flex items-center justify-center
-                     hover:bg-primary-dark transition-colors
-                     focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-        >
-          <Plus size={24} aria-hidden="true" />
-        </Link>
-      )}
     </>
   );
 }
