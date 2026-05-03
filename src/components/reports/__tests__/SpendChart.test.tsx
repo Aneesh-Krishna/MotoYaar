@@ -1,12 +1,25 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
-import React, { Suspense } from "react";
+import React from "react";
 
 // ─── Mock next/dynamic ────────────────────────────────────────────────────────
-// Replace with React.lazy so dynamic imports resolve in jsdom without SSR plumbing.
+// Invoke loader() immediately (at module-load time, while vi.mock intercepts are active),
+// store the promise, then drain it during mount.
 vi.mock("next/dynamic", () => ({
-  default: (loader: () => Promise<{ default: React.ComponentType<unknown> }>) =>
-    React.lazy(loader),
+  default: (loader: () => Promise<{ default: React.ComponentType<unknown> }>) => {
+    // Called during SpendChart module evaluation — vi.mock registry is already set up.
+    const modulePromise = loader();
+
+    function DynamicComponent(props: Record<string, unknown>) {
+      const [Comp, setComp] = React.useState<React.ComponentType<unknown> | null>(null);
+      React.useEffect(() => {
+        modulePromise.then((mod) => setComp(() => mod.default));
+      }, []);
+      if (!Comp) return null;
+      return React.createElement(Comp, props);
+    }
+    return DynamicComponent;
+  },
 }));
 
 // ─── Mock widget modules ──────────────────────────────────────────────────────
@@ -44,11 +57,7 @@ const monthlyData: MonthlyDataPoint[] = [
 ];
 
 function renderChart(props: React.ComponentProps<typeof SpendChart>) {
-  return render(
-    <Suspense fallback={<div data-testid="chart-skeleton" />}>
-      <SpendChart {...props} />
-    </Suspense>
-  );
+  return render(<SpendChart {...props} />);
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
@@ -90,13 +99,8 @@ describe("SpendChart", () => {
     expect(await screen.findByTestId("donut-chart-widget")).toHaveAttribute("data-currency", "EUR");
   });
 
-  it("shows skeleton while dynamic import is loading", () => {
+  it("renders without crashing (dynamic import resolves)", async () => {
     renderChart({ chartType: "bar", categoryData, monthlyData, currency: "INR" });
-
-    // Before async resolution, the Suspense fallback is visible
-    // (will disappear once widget resolves, but skeleton was shown)
-    // We assert that the component renders without crashing and the skeleton
-    // was present in the Suspense boundary
-    expect(document.body).toBeDefined();
+    expect(await screen.findByTestId("bar-chart-widget")).toBeInTheDocument();
   });
 });
