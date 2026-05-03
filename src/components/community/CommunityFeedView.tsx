@@ -2,10 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Plus, Search, Tag, Users, X } from "lucide-react";
+import { Search, Tag, Users, X } from "lucide-react";
 import { PostCard } from "@/components/ui/PostCard";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { LoginPromptModal } from "@/components/community/LoginPromptModal";
 import { cn } from "@/lib/utils";
 import { listPosts } from "@/services/api/communityApi";
 import type { FeedPost } from "@/types";
@@ -31,7 +30,6 @@ export function CommunityFeedView({ initialPosts, initialHasMore, isAuthenticate
   const [debouncedQuery, setDebouncedQuery] = useState(() => searchParams.get("q") ?? "");
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const [posts, setPosts] = useState<FeedPost[]>(initialPosts);
   const [hasMore, setHasMore] = useState(initialHasMore);
   const [page, setPage] = useState(1);
@@ -131,14 +129,6 @@ export function CommunityFeedView({ initialPosts, initialHasMore, isAuthenticate
     if (sentinelRef.current) observer.observe(sentinelRef.current);
     return () => observer.disconnect();
   }, [hasMore, isLoadingMore, loadMorePosts]);
-
-  const handleNewPost = () => {
-    if (!isAuthenticated) {
-      setShowLoginPrompt(true);
-      return;
-    }
-    router.push("/community/new");
-  };
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -341,23 +331,6 @@ export function CommunityFeedView({ initialPosts, initialHasMore, isAuthenticate
         </div>
       </div>
 
-      {/* FAB — New Post */}
-      <button
-        onClick={handleNewPost}
-        aria-label="Create a new post"
-        className="fixed right-4 bottom-[calc(4rem+env(safe-area-inset-bottom)+1rem)] z-30 lg:hidden
-                   w-14 h-14 bg-primary text-white rounded-full shadow-lg
-                   flex items-center justify-center
-                   hover:bg-primary-dark transition-colors
-                   focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-      >
-        <Plus size={24} aria-hidden="true" />
-      </button>
-
-      <LoginPromptModal
-        open={showLoginPrompt}
-        onOpenChange={setShowLoginPrompt}
-      />
     </>
   );
 }
