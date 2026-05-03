@@ -140,6 +140,7 @@ export const trips = pgTable(
     timeTaken: text("time_taken"),
     breakdown: jsonb("breakdown").notNull().default([]),
     hasLiveRoute: boolean("has_live_route").notNull().default(false),
+    plannedStops: jsonb("planned_stops").$type<import("@/types").PlannedStop[]>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({

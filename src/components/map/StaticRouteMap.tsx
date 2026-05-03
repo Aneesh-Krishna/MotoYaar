@@ -1,34 +1,12 @@
-"use client";
-import "leaflet/dist/leaflet.css";
-import { useEffect } from "react";
-import { MapContainer, TileLayer, Polyline, useMap } from "react-leaflet";
-import type { Waypoint } from "@/types";
+"use client"
+// TODO (Story 13.5): Implement full Mappls static route map replacing this stub.
+// Use MapplsMap from @/components/map/MapplsMap with Mappls tile domain; zoom cap 15.
+import type { Waypoint } from "@/types"
 
-function FitBoundsController({ positions }: { positions: [number, number][] }) {
-  const map = useMap();
-  useEffect(() => {
-    if (positions.length >= 2) {
-      const L = require("leaflet");
-      map.fitBounds(L.latLngBounds(positions), { padding: [20, 20] });
-    }
-  }, [positions, map]);
-  return null;
-}
-
-export default function StaticRouteMap({ waypoints }: { waypoints: Waypoint[] }) {
-  const positions: [number, number][] = waypoints.map(w => [w.lat, w.lng]);
-  const centre = positions[0] ?? [20.5937, 78.9629];
-
+export default function StaticRouteMap({ waypoints: _waypoints }: { waypoints: Waypoint[] }) {
   return (
-    <MapContainer center={centre} zoom={13} className="h-full w-full" zoomControl={false} scrollWheelZoom={false}>
-      <TileLayer
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        attribution='&copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a>'
-      />
-      {positions.length >= 2 && (
-        <Polyline positions={positions} color="#F97316" weight={4} opacity={0.9} />
-      )}
-      <FitBoundsController positions={positions} />
-    </MapContainer>
-  );
+    <div className="h-full w-full bg-gray-100 flex items-center justify-center">
+      <p className="text-sm text-gray-500">Map (Mappls) coming in Story 13.5</p>
+    </div>
+  )
 }

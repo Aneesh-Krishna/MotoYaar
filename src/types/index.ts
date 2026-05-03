@@ -332,3 +332,32 @@ export interface AiReport {
 // ─── Community ────────────────────────────────────────────────────────────────
 
 export type FeedPost = Post;
+
+// ─── Route Planning & Navigation ─────────────────────────────────────────────
+
+export interface PlannedStop {
+  order: number          // 0 = origin, 1..N = intermediate stops + final destination
+  name: string           // display name from Mappls Places API
+  lat: number
+  lng: number
+}
+
+export interface RouteInstruction {
+  stepIndex: number
+  manoeuvre: string      // e.g. "turn-left" | "turn-right" | "straight" | "arrive"
+  streetName: string
+  distanceToNext: number // metres to the next instruction
+  durationToNext: number // seconds to the next instruction
+  triggerLat: number     // lat at which to fire the voice announcement
+  triggerLng: number
+  bearing: number        // degrees; for manoeuvre icon rotation
+}
+
+// Persisted to IndexedDB store 'nav-cache' at key `offline_route:${tripId}`
+export interface OfflineNavCache {
+  tripId: string
+  routeGeometry: Array<{ lat: number; lng: number }>  // full route polyline
+  instructions: RouteInstruction[]
+  stops: PlannedStop[]
+  savedAt: number  // Unix ms
+}
