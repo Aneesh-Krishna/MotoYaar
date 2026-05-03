@@ -254,7 +254,7 @@ export const communityService = {
         user: true,
         reactions: true,
         comments: { with: { user: true, replies: { with: { user: true } } } },
-      } as never,
+      },
     })) as unknown as (RawPost & { comments?: RawComment[] }) | null;
 
     if (!raw) throw new NotFoundError("Post not found");
@@ -452,7 +452,7 @@ export const communityService = {
     const rawComments = (await db.query.comments.findMany({
       where: eq(comments.postId, postId),
       with: { user: true, replies: { with: { user: true } } },
-    } as never)) as unknown as RawComment[];
+    })) as unknown as RawComment[];
 
     return rawComments
       .filter((c) => !c.parentCommentId)
@@ -480,7 +480,7 @@ export const communityService = {
   async deleteComment(commentId: string, userId: string): Promise<void> {
     const comment = await db.query.comments.findFirst({
       where: eq(comments.id, commentId),
-      with: { replies: true } as never,
+      with: { replies: true },
     }) as (typeof comments.$inferSelect & { replies?: { id: string }[] }) | null;
 
     if (!comment) throw new NotFoundError("Comment not found");

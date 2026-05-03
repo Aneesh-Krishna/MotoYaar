@@ -14,7 +14,7 @@ import {
   uniqueIndex,
   check,
 } from "drizzle-orm/pg-core";
-import { sql } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 
 // ─── Users ────────────────────────────────────────────────────────────────────
 export const users = pgTable(
@@ -499,3 +499,33 @@ export const liveTripParticipants = pgTable(
     ),
   })
 );
+
+// ─── Relations ────────────────────────────────────────────────────────────────
+
+export const usersRelations = relations(users, ({ many }) => ({
+  posts: many(posts),
+  comments: many(comments),
+  postReactions: many(postReactions),
+}));
+
+export const postsRelations = relations(posts, ({ one, many }) => ({
+  user: one(users, { fields: [posts.userId], references: [users.id] }),
+  reactions: many(postReactions),
+  comments: many(comments),
+}));
+
+export const postReactionsRelations = relations(postReactions, ({ one }) => ({
+  post: one(posts, { fields: [postReactions.postId], references: [posts.id] }),
+  user: one(users, { fields: [postReactions.userId], references: [users.id] }),
+}));
+
+export const commentsRelations = relations(comments, ({ one, many }) => ({
+  post: one(posts, { fields: [comments.postId], references: [posts.id] }),
+  user: one(users, { fields: [comments.userId], references: [users.id] }),
+  parentComment: one(comments, {
+    fields: [comments.parentCommentId],
+    references: [comments.id],
+    relationName: "commentReplies",
+  }),
+  replies: many(comments, { relationName: "commentReplies" }),
+}));
