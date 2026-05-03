@@ -19,6 +19,10 @@ export const metadata: Metadata = {
     statusBarStyle: "default",
     title: "MotoYaar",
   },
+  icons: {
+    icon: "/icons/icon-192.png",
+    apple: "/icons/apple-touch-icon.png",
+  },
   formatDetection: { telephone: false },
   openGraph: {
     type: "website",

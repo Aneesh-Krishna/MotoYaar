@@ -18,10 +18,8 @@ export function SidebarNav() {
       )}
     >
       {/* Logo */}
-      <div className="flex items-center gap-2 px-6 py-5 border-b border-gray-200">
-        <span className="text-orange-500 font-bold text-xl tracking-tight">
-          MotoYaar
-        </span>
+      <div className="flex items-center px-6 py-4 border-b border-gray-200">
+        <span className="text-xl font-bold text-orange-500 tracking-tight">MotoYaar</span>
       </div>
 
       {/* Nav links */}

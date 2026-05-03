@@ -19,9 +19,7 @@ export function TopBar() {
       >
         <div className="flex h-full items-center justify-between px-4">
           {/* Logo */}
-          <span className="text-orange-500 font-bold text-xl tracking-tight">
-            MotoYaar
-          </span>
+          <span className="text-xl font-bold text-orange-500 tracking-tight">MotoYaar</span>
 
           {/* Bell */}
           <button
