@@ -390,7 +390,7 @@ export const communityService = {
       await db
         .insert(postReactions)
         .values({ postId, userId, type })
-        .onConflictDoUpdate({ target: postReactions.id, set: { type } });
+        .onConflictDoUpdate({ target: [postReactions.postId, postReactions.userId], set: { type } });
     }
 
     // Use aggregation instead of loading all reactions
@@ -436,6 +436,11 @@ export const communityService = {
       .values({ postId, userId, content, parentCommentId: parentCommentId ?? null })
       .returning();
 
+    const author = await db.query.users.findFirst({
+      where: eq(users.id, userId),
+      columns: { id: true, name: true, username: true, profileImageUrl: true },
+    });
+
     return {
       id: comment.id,
       postId: comment.postId,
@@ -443,7 +448,7 @@ export const communityService = {
       userId: comment.userId,
       content: comment.content,
       createdAt: comment.createdAt instanceof Date ? comment.createdAt.toISOString() : String(comment.createdAt),
-      author: undefined,
+      author: mapAuthor(author),
       replies: [],
     };
   },

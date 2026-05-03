@@ -165,7 +165,7 @@ export function PostDetailView({ post, currentUserId }: PostDetailViewProps) {
   }
 
   return (
-    <div className="max-w-2xl mx-auto px-4 pb-24">
+    <div className="max-w-2xl mx-auto px-4 pb-40 lg:pb-24">
       {/* Post header: author + kebab */}
       <div className="flex items-center gap-2.5 py-4">
         <div className="relative w-9 h-9 rounded-full bg-gray-200 shrink-0 overflow-hidden">
@@ -328,7 +328,7 @@ export function PostDetailView({ post, currentUserId }: PostDetailViewProps) {
       {isAuthenticated ? (
         <form
           onSubmit={handleTopLevelComment}
-          className="fixed bottom-0 left-0 right-0 bg-background border-t border-border px-4 py-3 flex items-center gap-2"
+          className="fixed bottom-16 lg:bottom-0 left-0 right-0 z-40 bg-background border-t border-border px-4 py-3 flex items-center gap-2"
         >
           <input
             type="text"
@@ -346,7 +346,7 @@ export function PostDetailView({ post, currentUserId }: PostDetailViewProps) {
           </button>
         </form>
       ) : (
-        <div className="fixed bottom-0 left-0 right-0 bg-background border-t border-border px-4 py-3">
+        <div className="fixed bottom-16 lg:bottom-0 left-0 right-0 z-40 bg-background border-t border-border px-4 py-3">
           <button
             onClick={() => setShowLoginPrompt(true)}
             className="w-full text-sm text-left border border-gray-200 rounded-full px-4 py-2 text-gray-400 hover:border-primary transition-colors"
