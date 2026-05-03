@@ -96,6 +96,8 @@ export function FAB() {
       aria-label={label}
       style={{ left: position.x, top: position.y }}
       className="fixed z-50 flex h-14 w-14 cursor-grab items-center justify-center rounded-full bg-orange-500 text-white shadow-lg active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 touch-none select-none"
+      draggable={false}
+      onDragStart={(e) => e.preventDefault()}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
