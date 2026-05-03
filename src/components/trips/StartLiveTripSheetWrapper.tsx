@@ -11,7 +11,7 @@ export function StartLiveTripSheetWrapper() {
       <button
         onClick={() => setOpen(true)}
         aria-label="Start a live trip"
-        className="fixed right-4 bottom-[calc(4rem+env(safe-area-inset-bottom)+5rem)] z-30 lg:hidden
+        className="fixed right-4 bottom-[calc(4rem+env(safe-area-inset-bottom)+5rem)] z-50 lg:hidden
                    w-14 h-14 bg-orange-500 text-white rounded-full shadow-lg
                    flex items-center justify-center
                    hover:bg-orange-600 transition-colors
