@@ -45,7 +45,6 @@ const {
   const mockCommentFindFirst = vi.fn();
   const mockCommentFindMany = vi.fn();
   const makeChain = (data: unknown[]) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const chain: any = {};
     chain.from = vi.fn().mockReturnValue(chain);
     chain.leftJoin = vi.fn().mockReturnValue(chain);
