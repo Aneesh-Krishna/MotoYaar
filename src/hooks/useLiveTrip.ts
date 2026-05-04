@@ -2,6 +2,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { haversineDistance } from "@/utils/geo";
 import { saveLiveTripState, getLiveTripState, clearLiveTripState } from "@/lib/liveTripDb";
+import { openDB } from "idb";
 import { apiRequest } from "@/lib/api-client";
 import { toast } from "sonner";
 import type { Waypoint, LocalLiveTripState } from "@/types";
@@ -143,6 +144,18 @@ export function useLiveTrip(tripId: string, highAccuracy = false) {
       await flush(state.pendingWaypoints);
     }
     await clearLiveTripState(tripId);
+    try {
+      const db = await openDB("motoyaar-nav", 1, {
+        upgrade(db) {
+          if (!db.objectStoreNames.contains("nav-cache")) {
+            db.createObjectStore("nav-cache");
+          }
+        },
+      });
+      await db.delete("nav-cache", `offline_route:${tripId}`);
+    } catch {
+      // nav cache may not exist — ignore
+    }
     setIsTracking(false);
     setPendingCount(0);
   }, [tripId, flush]);
