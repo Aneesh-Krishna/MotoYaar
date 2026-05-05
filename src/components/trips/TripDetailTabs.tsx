@@ -1,9 +1,9 @@
 "use client";
 
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { Suspense } from "react";
-import dynamic from "next/dynamic";
 import type { Trip, Expense } from "@/types";
+
+import TripOverviewTab from "./TripOverviewTab";
 
 interface Props {
   trip: Trip;
@@ -12,15 +12,8 @@ interface Props {
   visibleTabs: string[];
 }
 
-const TripRouteView = dynamic(() => import("@/components/map/TripRouteView"), {
-  ssr: false,
-});
-
-import TripOverviewTab from "./TripOverviewTab";
-
 const TABS = [
   { id: "overview", label: "Overview" },
-  { id: "route", label: "Route" },
 ];
 
 export default function TripDetailTabs({
@@ -72,11 +65,6 @@ export default function TripDetailTabs({
       >
         {activeTab === "overview" && (
           <TripOverviewTab trip={trip} linkedExpense={linkedExpense} />
-        )}
-        {activeTab === "route" && trip.hasLiveRoute && (
-          <Suspense fallback={<div className="h-64 bg-gray-100 rounded-xl animate-pulse" />}>
-            <TripRouteView tripId={trip.id} />
-          </Suspense>
         )}
       </div>
     </div>

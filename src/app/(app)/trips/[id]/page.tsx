@@ -5,10 +5,7 @@ import { expenseService } from "@/services/expenseService";
 import { redirect, notFound } from "next/navigation";
 import { ForbiddenError, NotFoundError } from "@/lib/errors";
 import { formatTripDateRange } from "@/utils/date";
-import { formatINR } from "@/utils/currency";
 import { TripKebabMenu } from "@/components/trips/TripKebabMenu";
-import { MapPin, Car, Clock, ChevronRight } from "lucide-react";
-import Link from "next/link";
 import type { Trip, Expense } from "@/types";
 import TripDetailTabs from "@/components/trips/TripDetailTabs";
 
@@ -26,7 +23,7 @@ function TripDetailHeader({ trip }: { trip: Trip }) {
         <h1 className="text-2xl font-bold text-gray-900">{trip.title}</h1>
         <p className="text-sm text-gray-500 mt-0.5">{dateRange}</p>
       </div>
-      <TripKebabMenu tripId={trip.id} hasLiveRoute={trip.hasLiveRoute} />
+      <TripKebabMenu tripId={trip.id} />
     </div>
   );
 }
@@ -42,11 +39,8 @@ export default async function TripDetailPage({ params, searchParams }: Props) {
       expenseService.getByTripId(params.id, session.user.id),
     ]);
 
-    const VALID_TABS = ["overview", "route"];
-    const activeTab = VALID_TABS.includes(searchParams.tab ?? "") ? searchParams.tab! : "overview";
-
-    // Only allow route tab if trip has live route
-    const visibleTabs = VALID_TABS.filter(tab => !(tab === "route" && !trip.hasLiveRoute));
+    const activeTab = searchParams.tab === "overview" ? "overview" : "overview";
+    const visibleTabs = ["overview"];
 
     return (
       <div className="px-4 py-4 space-y-6">

@@ -9,7 +9,6 @@ import {
   numeric,
   doublePrecision,
   jsonb,
-  varchar,
   index,
   uniqueIndex,
   check,
@@ -139,8 +138,6 @@ export const trips = pgTable(
     mapsLink: text("maps_link"),
     timeTaken: text("time_taken"),
     breakdown: jsonb("breakdown").notNull().default([]),
-    hasLiveRoute: boolean("has_live_route").notNull().default(false),
-    plannedStops: jsonb("planned_stops").$type<import("@/types").PlannedStop[]>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
@@ -444,62 +441,6 @@ export const aiReports = pgTable(
   })
 );
 
-// ─── trip_routes ──────────────────────────────────────────────────────────────
-export const tripRoutes = pgTable(
-  "trip_routes",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    tripId: uuid("trip_id").notNull().references(() => trips.id, { onDelete: "cascade" }),
-    waypoints: jsonb("waypoints").notNull().default([]),
-    distanceKm: numeric("distance_km", { precision: 8, scale: 3 }),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (table) => ({
-    tripIdIdx: index("idx_trip_routes_trip_id").on(table.tripId),
-    uniqueRoutePerTrip: uniqueIndex("unique_route_per_trip").on(table.tripId),
-  })
-);
-
-// ─── live_trip_sessions ───────────────────────────────────────────────────────
-export const liveTripSessions = pgTable(
-  "live_trip_sessions",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    tripId: uuid("trip_id").notNull().references(() => trips.id, { onDelete: "cascade" }),
-    hostUserId: uuid("host_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-    inviteCode: varchar("invite_code", { length: 6 }).notNull().unique(),
-    status: varchar("status", { length: 20 }).notNull().default("active"),
-    guestViewCount: integer("guest_view_count").notNull().default(0),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    endedAt: timestamp("ended_at", { withTimezone: true }),
-  },
-  (table) => ({
-    tripIdIdx: index("idx_live_sessions_trip_id").on(table.tripId),
-    inviteCodeIdx: index("idx_live_sessions_invite_code").on(table.inviteCode),
-  })
-);
-
-// ─── live_trip_participants ───────────────────────────────────────────────────
-export const liveTripParticipants = pgTable(
-  "live_trip_participants",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    sessionId: uuid("session_id").notNull().references(() => liveTripSessions.id, { onDelete: "cascade" }),
-    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-    status: varchar("status", { length: 20 }).notNull().default("active"),
-    joinedAt: timestamp("joined_at", { withTimezone: true }).notNull().defaultNow(),
-    leftAt: timestamp("left_at", { withTimezone: true }),
-  },
-  (table) => ({
-    sessionIdIdx: index("idx_live_participants_session_id").on(table.sessionId),
-    userIdIdx: index("idx_live_participants_user_id").on(table.userId),
-    uniqueParticipantPerSession: uniqueIndex("unique_participant_per_session").on(
-      table.sessionId,
-      table.userId
-    ),
-  })
-);
 
 // ─── Relations ────────────────────────────────────────────────────────────────
 
