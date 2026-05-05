@@ -1,9 +1,12 @@
 "use client"
 import { useState, useRef, useEffect } from "react"
+import { useJsApiLoader } from "@react-google-maps/api"
 import { X, Loader2, Search } from "lucide-react"
 import { toast } from "sonner"
 import { buildOfflineNavCache, saveOfflineNavCache } from "@/lib/navCacheDb"
 import type { OfflineNavCache, PlannedStop } from "@/types"
+
+const LIBRARIES: ("places" | "geometry")[] = ["places", "geometry"]
 
 interface Props {
   tripId: string
@@ -12,13 +15,31 @@ interface Props {
   onClose: () => void
 }
 
+interface Suggestion {
+  placeId: string
+  name: string
+  description: string
+}
+
 export function PlanRouteSheet({ tripId, currentPosition, onActivate, onClose }: Props) {
   const [query, setQuery] = useState("")
-  const [suggestions, setSuggestions] = useState<PlannedStop[]>([])
-  const [selected, setSelected] = useState<PlannedStop | null>(null)
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([])
+  const [selected, setSelected] = useState<{ placeId: string; name: string } | null>(null)
   const [isSearching, setIsSearching] = useState(false)
   const [isSetting, setIsSetting] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const autocompleteRef = useRef<google.maps.places.AutocompleteService | null>(null)
+
+  const { isLoaded } = useJsApiLoader({
+    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "",
+    libraries: LIBRARIES,
+  })
+
+  useEffect(() => {
+    if (isLoaded && !autocompleteRef.current) {
+      autocompleteRef.current = new google.maps.places.AutocompleteService()
+    }
+  }, [isLoaded])
 
   useEffect(() => {
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
@@ -28,71 +49,73 @@ export function PlanRouteSheet({ tripId, currentPosition, onActivate, onClose }:
     setQuery(value)
     setSelected(null)
     if (debounceRef.current) clearTimeout(debounceRef.current)
-    if (!value.trim()) { setSuggestions([]); return }
+    if (!value.trim() || !autocompleteRef.current) { setSuggestions([]); return }
 
-    debounceRef.current = setTimeout(async () => {
+    debounceRef.current = setTimeout(() => {
       setIsSearching(true)
-      try {
-        const sdk = (window as any).mappls
-        if (!sdk) return
-        await new Promise<void>((resolve, reject) => {
-          sdk.search(
-            { keywords: value, region: "IND" },
-            (results: any[]) => {
-              if (!results?.length) { setSuggestions([]); resolve(); return }
-              setSuggestions(
-                results.slice(0, 5).map((r: any, i: number) => ({
-                  order: i + 1,
-                  name: r.placeName ?? r.placeAddress ?? value,
-                  lat: parseFloat(r.latitude ?? r.lat ?? "0"),
-                  lng: parseFloat(r.longitude ?? r.lng ?? "0"),
-                }))
-              )
-              resolve()
-            },
-            reject
+      autocompleteRef.current!.getPlacePredictions(
+        { input: value, componentRestrictions: { country: "in" } },
+        (predictions, status) => {
+          setIsSearching(false)
+          if (
+            status !== google.maps.places.PlacesServiceStatus.OK ||
+            !predictions
+          ) {
+            setSuggestions([])
+            return
+          }
+          setSuggestions(
+            predictions.slice(0, 5).map(p => ({
+              placeId: p.place_id,
+              name: p.structured_formatting.main_text,
+              description: p.description,
+            }))
           )
-        })
-      } catch {
-        setSuggestions([])
-      } finally {
-        setIsSearching(false)
-      }
+        }
+      )
     }, 350)
   }
 
   async function handleSetDestination() {
-    if (!selected) return
+    if (!selected || !isLoaded) return
     setIsSetting(true)
     try {
-      const sdk = (window as any).mappls
-      if (!sdk) { toast.error("Map SDK not ready."); return }
+      const geocoder = new google.maps.Geocoder()
+      const geocodeResult = await new Promise<google.maps.GeocoderResult>(
+        (resolve, reject) => {
+          geocoder.geocode({ placeId: selected.placeId }, (results, status) => {
+            if (status !== google.maps.GeocoderStatus.OK || !results?.[0]) {
+              reject(new Error("geocode failed"))
+              return
+            }
+            resolve(results[0])
+          })
+        }
+      )
 
+      const destLoc = geocodeResult.geometry.location
       const origin: PlannedStop = {
         order: 0,
         name: "Current position",
         lat: currentPosition.lat,
         lng: currentPosition.lng,
       }
-      const destination: PlannedStop = { ...selected, order: 1 }
-      const stops = [origin, destination]
+      const destination: PlannedStop = {
+        order: 1,
+        name: selected.name,
+        lat: destLoc.lat(),
+        lng: destLoc.lng(),
+      }
 
-      const routeData = await new Promise<any>((resolve, reject) => {
-        sdk.direction(
-          {
-            origin: `${origin.lat},${origin.lng}`,
-            destination: `${destination.lat},${destination.lng}`,
-            rtype: 1,
-            region: "IND",
-          },
-          (data: any) => {
-            if (!data?.routes?.[0]) { reject(new Error("no route")); return }
-            resolve(data)
-          }
-        )
+      const directionsService = new google.maps.DirectionsService()
+      const response = await directionsService.route({
+        origin: new google.maps.LatLng(origin.lat, origin.lng),
+        destination: new google.maps.LatLng(destination.lat, destination.lng),
+        travelMode: google.maps.TravelMode.DRIVING,
+        region: "in",
       })
 
-      const cache = buildOfflineNavCache(tripId, routeData, stops)
+      const cache = buildOfflineNavCache(tripId, response, [origin, destination])
       await saveOfflineNavCache(cache)
       onActivate(cache)
       onClose()
@@ -128,13 +151,14 @@ export function PlanRouteSheet({ tripId, currentPosition, onActivate, onClose }:
 
       {suggestions.length > 0 && !selected && (
         <ul className="border border-gray-100 rounded-xl overflow-hidden divide-y divide-gray-100">
-          {suggestions.map((s, i) => (
-            <li key={i}>
+          {suggestions.map((s) => (
+            <li key={s.placeId}>
               <button
                 className="w-full text-left px-4 py-3 text-sm hover:bg-orange-50 transition-colors"
                 onClick={() => { setSelected(s); setQuery(s.name); setSuggestions([]) }}
               >
-                {s.name}
+                <p className="font-medium text-gray-900 truncate">{s.name}</p>
+                <p className="text-xs text-gray-500 truncate">{s.description}</p>
               </button>
             </li>
           ))}
@@ -142,7 +166,7 @@ export function PlanRouteSheet({ tripId, currentPosition, onActivate, onClose }:
       )}
 
       <button
-        disabled={!selected || isSetting}
+        disabled={!selected || isSetting || !isLoaded}
         onClick={handleSetDestination}
         className="flex items-center justify-center gap-2 w-full py-3 bg-orange-500 disabled:bg-orange-200 text-white font-semibold rounded-xl text-sm transition-colors"
       >

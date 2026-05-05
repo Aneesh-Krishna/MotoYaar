@@ -3,25 +3,37 @@ import type { OfflineNavCache, PlannedStop, RouteInstruction } from "@/types"
 
 export function buildOfflineNavCache(
   tripId: string,
-  routeData: any,
+  routeData: google.maps.DirectionsResult,
   stops: PlannedStop[]
 ): OfflineNavCache {
-  const routeGeometry: Array<{ lat: number; lng: number }> = (
-    routeData.routes?.[0]?.geometry?.coordinates ?? []
-  ).map(([lng, lat]: number[]) => ({ lat, lng }))
+  const route = routeData.routes?.[0]
+  if (!route) return { tripId, routeGeometry: [], instructions: [], stops, savedAt: Date.now() }
+
+  const routeGeometry: Array<{ lat: number; lng: number }> = []
+  for (const leg of route.legs) {
+    for (const step of leg.steps) {
+      const points = step.polyline?.points
+      if (points) {
+        google.maps.geometry.encoding
+          .decodePath(points)
+          .forEach(p => routeGeometry.push({ lat: p.lat(), lng: p.lng() }))
+      }
+    }
+  }
 
   const instructions: RouteInstruction[] = []
-  for (const leg of routeData.routes?.[0]?.legs ?? []) {
-    for (const step of leg.steps ?? []) {
+  for (const leg of route.legs) {
+    for (const step of leg.steps) {
+      const endLoc = step.end_location
       instructions.push({
         stepIndex: instructions.length,
-        manoeuvre: step.maneuver?.type ?? "straight",
-        streetName: step.name ?? "",
-        distanceToNext: step.distance ?? 0,
-        durationToNext: step.duration ?? 0,
-        triggerLat: step.maneuver?.location?.[1] ?? 0,
-        triggerLng: step.maneuver?.location?.[0] ?? 0,
-        bearing: step.maneuver?.bearing_after ?? 0,
+        manoeuvre: step.maneuver ?? "straight",
+        streetName: step.instructions.replace(/<[^>]+>/g, ""),
+        distanceToNext: step.distance?.value ?? 0,
+        durationToNext: step.duration?.value ?? 0,
+        triggerLat: endLoc.lat(),
+        triggerLng: endLoc.lng(),
+        bearing: 0,
       })
     }
   }
