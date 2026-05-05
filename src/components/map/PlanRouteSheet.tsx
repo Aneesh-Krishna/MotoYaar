@@ -37,15 +37,15 @@ export function PlanRouteSheet({ tripId, currentPosition, onActivate, onClose }:
         if (!sdk) return
         await new Promise<void>((resolve, reject) => {
           sdk.search(
-            { query: value, region: "IND" },
+            { keywords: value, region: "IND" },
             (results: any[]) => {
               if (!results?.length) { setSuggestions([]); resolve(); return }
               setSuggestions(
                 results.slice(0, 5).map((r: any, i: number) => ({
                   order: i + 1,
                   name: r.placeName ?? r.placeAddress ?? value,
-                  lat: r.latitude ?? r.lat ?? 0,
-                  lng: r.longitude ?? r.lng ?? 0,
+                  lat: parseFloat(r.latitude ?? r.lat ?? "0"),
+                  lng: parseFloat(r.longitude ?? r.lng ?? "0"),
                 }))
               )
               resolve()
