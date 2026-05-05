@@ -14,9 +14,10 @@ vi.mock("next/dynamic", () => ({
   default: () => () => <div data-testid="google-map" />,
 }));
 
-// Mock useJsApiLoader used directly in the live page
-vi.mock("@react-google-maps/api", () => ({
-  useJsApiLoader: () => ({ isLoaded: true }),
+// Mock googleMapsLoader — live page uses useGoogleMapsLoaded
+vi.mock("@/lib/googleMapsLoader", () => ({
+  useGoogleMapsLoaded: () => true,
+  GoogleMapsLoader: ({ children }: { children: React.ReactNode }) => children,
 }));
 
 const mockStartTracking = vi.fn();
