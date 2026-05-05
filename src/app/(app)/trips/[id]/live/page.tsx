@@ -2,6 +2,7 @@
 import dynamic from "next/dynamic";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { useJsApiLoader } from "@react-google-maps/api";
 import { Crosshair, Radio, Square } from "lucide-react";
 import { useLiveTrip } from "@/hooks/useLiveTrip";
 import { useNavigation } from "@/hooks/useNavigation";
@@ -13,7 +14,9 @@ import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { formatDistance, formatElapsed, formatSpeed } from "@/utils/geo";
 import type { Waypoint } from "@/types";
 
-const MapplsMap = dynamic(() => import("@/components/map/MapplsMap"), {
+const LIBRARIES: ("places" | "geometry")[] = ["places", "geometry"];
+
+const GoogleMapView = dynamic(() => import("@/components/map/GoogleMapView"), {
   ssr: false,
   loading: () => (
     <div className="h-full w-full bg-gray-100 flex items-center justify-center">
@@ -53,11 +56,16 @@ export default function LiveTripPage({
   const [waypoints, setWaypoints] = useState<Waypoint[]>([]);
   const waypointsRef = useRef<Waypoint[]>([]);
 
-  const mapRef = useRef<any>(null);
-  const livePolylineRef = useRef<any>(null);
-  const plannedPolylineRef = useRef<any>(null);
+  const mapRef = useRef<google.maps.Map | null>(null);
+  const livePolylineRef = useRef<google.maps.Polyline | null>(null);
+  const plannedPolylineRef = useRef<google.maps.Polyline | null>(null);
   const mapReadyRef = useRef(false);
   const [mapReady, setMapReady] = useState(false);
+
+  const { isLoaded: mapsLoaded } = useJsApiLoader({
+    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "",
+    libraries: LIBRARIES,
+  });
 
   const { startTracking, stopTracking, pauseTracking, currentPosition, pendingCount } =
     useLiveTrip(params.id);
@@ -81,7 +89,6 @@ export default function LiveTripPage({
     activateNavigation,
   } = useNavigation(params.id, navPosition);
 
-  // Start tracking on mount; pause on tab close so ResumeTripBanner can detect it
   useEffect(() => {
     startTracking();
     const onBeforeUnload = () => { pauseTracking(); };
@@ -90,7 +97,6 @@ export default function LiveTripPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Track online/offline state
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
@@ -102,7 +108,6 @@ export default function LiveTripPage({
     };
   }, []);
 
-  // Accumulate waypoints from position updates for stats display
   useEffect(() => {
     if (!currentPosition) return;
     const wp: Waypoint = {
@@ -120,61 +125,43 @@ export default function LiveTripPage({
   // Draw planned route overlay (grey polyline) once map and cache are ready
   useEffect(() => {
     const map = mapRef.current;
-    if (!mapReady || !map || !cache || cache.routeGeometry.length < 2) return;
-    const sdk = (window as any).mappls;
-    if (!sdk) return;
+    if (!mapReady || !map || !mapsLoaded || !cache || cache.routeGeometry.length < 2) return;
 
-    plannedPolylineRef.current?.remove?.();
-    try {
-      plannedPolylineRef.current = new sdk.Polyline({
-        map,
-        path: cache.routeGeometry.map(p => [p.lat, p.lng]),
-        strokeColor: "#9CA3AF",
-        strokeOpacity: 0.6,
-        strokeWeight: 4,
-      });
-    } catch {
-      // Mappls SDK polyline API may vary — skip gracefully
-    }
-  }, [cache, mapReady]);
+    plannedPolylineRef.current?.setMap(null);
+    plannedPolylineRef.current = new google.maps.Polyline({
+      map,
+      path: cache.routeGeometry.map(p => ({ lat: p.lat, lng: p.lng })),
+      strokeColor: "#9CA3AF",
+      strokeOpacity: 0.6,
+      strokeWeight: 4,
+    });
+  }, [cache, mapReady, mapsLoaded]);
 
   // Draw live recorded trace (orange polyline) on each waypoint update
   useEffect(() => {
     const map = mapRef.current;
-    if (!mapReadyRef.current || !map || waypoints.length < 2) return;
-    const sdk = (window as any).mappls;
-    if (!sdk) return;
+    if (!mapReadyRef.current || !map || !mapsLoaded || waypoints.length < 2) return;
 
-    livePolylineRef.current?.remove?.();
-    try {
-      livePolylineRef.current = new sdk.Polyline({
-        map,
-        path: waypoints.map(w => [w.lat, w.lng]),
-        strokeColor: "#F97316",
-        strokeOpacity: 0.85,
-        strokeWeight: 4,
-      });
-    } catch {
-      // Mappls SDK polyline API may vary — skip gracefully
-    }
-  }, [waypoints]); // eslint-disable-line react-hooks/exhaustive-deps
+    livePolylineRef.current?.setMap(null);
+    livePolylineRef.current = new google.maps.Polyline({
+      map,
+      path: waypoints.map(w => ({ lat: w.lat, lng: w.lng })),
+      strokeColor: "#F97316",
+      strokeOpacity: 0.85,
+      strokeWeight: 4,
+    });
+  }, [waypoints, mapsLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-center map on current position
   useEffect(() => {
     if (!autoCenter || !currentPosition || !mapRef.current || !mapReadyRef.current) return;
-    const sdk = (window as any).mappls;
-    if (!sdk) return;
-    try {
-      mapRef.current.setCenter([
-        currentPosition.coords.latitude,
-        currentPosition.coords.longitude,
-      ]);
-    } catch {
-      // ignore
-    }
+    mapRef.current.panTo({
+      lat: currentPosition.coords.latitude,
+      lng: currentPosition.coords.longitude,
+    });
   }, [currentPosition, autoCenter]);
 
-  const handleMapReady = useCallback((map: any) => {
+  const handleMapReady = useCallback((map: google.maps.Map) => {
     mapRef.current = map;
     mapReadyRef.current = true;
     setMapReady(true);
@@ -182,6 +169,9 @@ export default function LiveTripPage({
 
   const handleStop = async () => {
     setIsStopping(true);
+    // Clean up polylines before navigation
+    livePolylineRef.current?.setMap(null);
+    plannedPolylineRef.current?.setMap(null);
     await stopTracking();
     router.push(`/trips/${params.id}`);
   };
@@ -192,8 +182,7 @@ export default function LiveTripPage({
     <div className="relative h-screen w-screen overflow-hidden">
       {/* Full-screen map */}
       <div className="absolute inset-0">
-        <MapplsMap
-          mapId="live-trip-map"
+        <GoogleMapView
           className="w-full h-full"
           center={center}
           zoom={15}
@@ -239,7 +228,7 @@ export default function LiveTripPage({
         </div>
       )}
 
-      {/* Mid-trip Plan Route button — visible only when no route was planned (Task 7.2) */}
+      {/* Mid-trip Plan Route button — visible only when no route was planned */}
       {!hasNavigation && navPosition && (
         <button
           onClick={() => setShowPlanRouteSheet(true)}

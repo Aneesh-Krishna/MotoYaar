@@ -1,16 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import dynamic from "next/dynamic";
 import Link from "next/link";
-import { MapPin, Car, Clock, ChevronRight, Download } from "lucide-react";
+import { MapPin, Car, Clock, ChevronRight } from "lucide-react";
 import { formatINR } from "@/utils/currency";
-import OfflineMapsSection from "@/components/map/OfflineMapsSection";
 import type { Trip, Expense } from "@/types";
-
-const OfflineMapSheet = dynamic(() => import("@/components/map/OfflineMapSheet"), {
-  ssr: false,
-});
 
 interface Props {
   trip: Trip;
@@ -18,7 +11,6 @@ interface Props {
 }
 
 export default function TripOverviewTab({ trip, linkedExpense }: Props) {
-  const [showDownloadSheet, setShowDownloadSheet] = useState(false);
   const totalCost = trip.breakdown.reduce((sum, item) => sum + item.amount, 0);
 
   return (
@@ -44,36 +36,6 @@ export default function TripOverviewTab({ trip, linkedExpense }: Props) {
               View on Maps
             </a>
           )}
-        </div>
-      )}
-
-      <button
-        onClick={() => setShowDownloadSheet(true)}
-        className="w-full flex items-center justify-center gap-2 bg-blue-50 text-blue-600 py-3 rounded-xl text-sm font-medium hover:bg-blue-100"
-      >
-        <Download size={16} />
-        Download map for offline use
-      </button>
-
-      {showDownloadSheet && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-end">
-          <div className="w-full bg-white rounded-t-xl flex flex-col" style={{ height: "90vh" }}>
-            <div className="flex justify-between items-center p-4 border-b">
-              <h2 className="text-lg font-semibold">Download Offline Map</h2>
-              <button
-                onClick={() => setShowDownloadSheet(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                ✕
-              </button>
-            </div>
-            <OfflineMapSheet
-              tripId={trip.id}
-              onComplete={() => {
-                setShowDownloadSheet(false);
-              }}
-            />
-          </div>
         </div>
       )}
 
@@ -120,8 +82,6 @@ export default function TripOverviewTab({ trip, linkedExpense }: Props) {
           ))}
         </div>
       )}
-
-      <OfflineMapsSection tripId={trip.id} />
 
       {linkedExpense && (
         <span className="text-sm text-gray-500 underline cursor-default">

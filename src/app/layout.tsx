@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
-import Script from "next/script";
 import { Providers } from "@/components/Providers";
 import "./globals.css";
 
@@ -49,13 +48,6 @@ export default function RootLayout({
     <html lang="en" className={inter.variable}>
       <body>
         <Providers>{children}</Providers>
-        {process.env.NEXT_PUBLIC_MAPPLS_API_KEY && (
-          <Script
-            id="mappls-sdk"
-            src={`https://apis.mappls.com/advancedmaps/api/${process.env.NEXT_PUBLIC_MAPPLS_API_KEY}/map_sdk?layer=vector&v=3.0&libraries=direction`}
-            strategy="afterInteractive"
-          />
-        )}
       </body>
     </html>
   );
