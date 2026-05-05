@@ -9,9 +9,14 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: mockPush }),
 }));
 
-// Stub out LeafletMap — it has browser-only Leaflet deps
+// Stub GoogleMapView — browser-only Google Maps deps
 vi.mock("next/dynamic", () => ({
-  default: () => () => <div data-testid="leaflet-map" />,
+  default: () => () => <div data-testid="google-map" />,
+}));
+
+// Mock useJsApiLoader used directly in the live page
+vi.mock("@react-google-maps/api", () => ({
+  useJsApiLoader: () => ({ isLoaded: true }),
 }));
 
 const mockStartTracking = vi.fn();

@@ -67,51 +67,49 @@ export async function rerouteFromCurrentPosition(
   stops: PlannedStop[],
   currentStopIndex: number
 ): Promise<RouteInstruction[] | null> {
-  const sdk = (window as any).mappls
-  if (!sdk) return null
+  if (typeof google === "undefined") return null
 
-  // Slice remaining stops from the current stop onwards
-  const remainingStops = currentStopIndex < stops.length ? stops.slice(currentStopIndex) : stops.slice(-1)
+  const remainingStops =
+    currentStopIndex < stops.length ? stops.slice(currentStopIndex) : stops.slice(-1)
+  if (remainingStops.length < 1) return null
+
+  const directionsService = new google.maps.DirectionsService()
+  const destination = remainingStops[remainingStops.length - 1]
+  const waypoints = remainingStops.slice(0, -1).map(s => ({
+    location: new google.maps.LatLng(s.lat, s.lng),
+    stopover: true,
+  }))
 
   try {
-    const result = await new Promise<RouteInstruction[]>((resolve, reject) => {
-      sdk.direction(
-        {
-          origin: `${currentPosition.lat},${currentPosition.lng}`,
-          destination: `${remainingStops[remainingStops.length - 1].lat},${remainingStops[remainingStops.length - 1].lng}`,
-          waypoints: remainingStops.slice(0, -1).map((s: PlannedStop) => `${s.lat},${s.lng}`).join(";"),
-          rtype: 1,
-          region: "IND",
-        },
-        (data: any) => {
-          if (!data?.routes?.[0]) { reject(new Error("no route")); return }
-
-          const route = data.routes[0]
-          const steps: RouteInstruction[] = []
-          let stepIndex = 0
-
-          for (const leg of (route.legs ?? [])) {
-            for (const step of (leg.steps ?? [])) {
-              const coords = step.geometry?.coordinates ?? []
-              const triggerCoord = coords[coords.length - 1] ?? [0, 0]
-              steps.push({
-                stepIndex: stepIndex++,
-                manoeuvre: step.maneuver?.type ?? "straight",
-                streetName: step.name ?? "",
-                distanceToNext: step.distance ?? 0,
-                durationToNext: step.duration ?? 0,
-                triggerLat: triggerCoord[1],
-                triggerLng: triggerCoord[0],
-                bearing: step.maneuver?.bearing_after ?? 0,
-              })
-            }
-          }
-
-          resolve(steps)
-        }
-      )
+    const response = await directionsService.route({
+      origin: new google.maps.LatLng(currentPosition.lat, currentPosition.lng),
+      destination: new google.maps.LatLng(destination.lat, destination.lng),
+      waypoints,
+      travelMode: google.maps.TravelMode.DRIVING,
+      region: "in",
     })
-    return result
+
+    const route = response.routes[0]
+    const steps: RouteInstruction[] = []
+    let stepIndex = 0
+
+    for (const leg of route.legs) {
+      for (const step of leg.steps) {
+        const endLoc = step.end_location
+        steps.push({
+          stepIndex: stepIndex++,
+          manoeuvre: step.maneuver ?? "straight",
+          streetName: step.instructions.replace(/<[^>]+>/g, ""),
+          distanceToNext: step.distance?.value ?? 0,
+          durationToNext: step.duration?.value ?? 0,
+          triggerLat: endLoc.lat(),
+          triggerLng: endLoc.lng(),
+          bearing: 0,
+        })
+      }
+    }
+
+    return steps
   } catch {
     return null
   }

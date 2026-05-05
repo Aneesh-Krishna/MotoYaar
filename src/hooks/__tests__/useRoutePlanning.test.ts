@@ -3,11 +3,44 @@ import { renderHook, act } from "@testing-library/react"
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
-const mockDirection = vi.fn()
-
-vi.mock("@/hooks/useMappls", () => ({
-  useMappls: () => ({ isReady: true, mappls: { direction: mockDirection } }),
+// Mock @react-google-maps/api so useJsApiLoader resolves immediately
+vi.mock("@react-google-maps/api", () => ({
+  useJsApiLoader: () => ({ isLoaded: true }),
 }))
+
+// Mock google.maps global — tests cover state management, not SDK calls
+const mockRoute = vi.fn()
+
+class MockDirectionsService {
+  route = mockRoute
+}
+class MockLatLng {
+  constructor(public _lat: number, public _lng: number) {}
+  lat() { return this._lat }
+  lng() { return this._lng }
+}
+class MockAutocompleteService {
+  getPlacePredictions = vi.fn()
+}
+class MockGeocoder {
+  geocode = vi.fn()
+}
+
+vi.stubGlobal("google", {
+  maps: {
+    DirectionsService: MockDirectionsService,
+    LatLng: MockLatLng,
+    TravelMode: { DRIVING: "DRIVING" },
+    places: {
+      AutocompleteService: MockAutocompleteService,
+      PlacesServiceStatus: { OK: "OK" },
+    },
+    Geocoder: MockGeocoder,
+    geometry: {
+      encoding: { decodePath: vi.fn(() => []) },
+    },
+  },
+})
 
 // ─── Imports (after mocks) ────────────────────────────────────────────────────
 
@@ -110,17 +143,24 @@ describe("useRoutePlanning", () => {
     expect(result.current.avoidHighways).toBe(true)
   })
 
-  it("sets routeResult when SDK direction resolves successfully", async () => {
-    mockDirection.mockImplementation((_opts: any, cb: Function) => {
-      cb({
-        routes: [{
-          geometry: { coordinates: [[77.5, 13.0], [77.59, 12.97]] },
-          legs: [{
-            distance: 15000,
-            duration: 1200,
-          }],
-        }],
-      })
+  it("sets routeResult when Directions API resolves successfully", async () => {
+    mockRoute.mockResolvedValue({
+      routes: [{
+        legs: [
+          {
+            distance: { value: 15000 },
+            duration: { value: 1200 },
+            steps: [{
+              polyline: { points: "" },
+              end_location: new MockLatLng(13.0, 77.5),
+              distance: { value: 15000 },
+              duration: { value: 1200 },
+              maneuver: "straight",
+              instructions: "Head north",
+            }],
+          },
+        ],
+      }],
     })
 
     const { result } = renderHook(() => useRoutePlanning())
@@ -137,10 +177,8 @@ describe("useRoutePlanning", () => {
     expect(result.current.routeError).toBe(false)
   })
 
-  it("sets routeError when SDK direction callback returns no routes", async () => {
-    mockDirection.mockImplementation((_opts: any, cb: Function) => {
-      cb(null) // null triggers reject in the Promise wrapper
-    })
+  it("sets routeError when Directions API rejects", async () => {
+    mockRoute.mockRejectedValue(new Error("ZERO_RESULTS"))
 
     const { result } = renderHook(() => useRoutePlanning())
     act(() => { result.current.setOriginFromGps(12.97, 77.59) })
@@ -163,7 +201,7 @@ describe("useRoutePlanning", () => {
       await new Promise(r => setTimeout(r, 600))
     })
 
-    expect(mockDirection).not.toHaveBeenCalled()
+    expect(mockRoute).not.toHaveBeenCalled()
     expect(result.current.routeResult).toBeNull()
   })
 })

@@ -1,6 +1,7 @@
 "use client"
 import { useEffect, useRef, useState } from "react"
 import dynamic from "next/dynamic"
+import { GoogleMap, Polyline, useJsApiLoader } from "@react-google-maps/api"
 import * as DialogPrimitive from "@radix-ui/react-dialog"
 import { AlertTriangle, ChevronLeft, Loader2, Plus } from "lucide-react"
 import { StopListItem } from "@/components/map/StopListItem"
@@ -8,12 +9,12 @@ import { useRoutePlanning, MAX_STOPS } from "@/hooks/useRoutePlanning"
 import type { PlannedStop } from "@/types"
 import type { RouteResult } from "@/hooks/useRoutePlanning"
 
-const MapplsMap = dynamic(() => import("@/components/map/MapplsMap"), { ssr: false })
+const LIBRARIES: ("places" | "geometry")[] = ["places", "geometry"]
 
 interface Props {
   tripId: string
   saving: boolean
-  onStartTrip: (stops: PlannedStop[], routeData: any) => void
+  onStartTrip: (stops: PlannedStop[], routeData: google.maps.DirectionsResult) => void
   onSkip: () => void
   onBack: () => void
 }
@@ -44,58 +45,37 @@ export function RoutePlanningStep({ tripId: _tripId, saving, onStartTrip, onSkip
     reorderStops,
   } = useRoutePlanning()
 
-  const mapRef = useRef<any>(null)
-  const polylineRef = useRef<any>(null)
-  const [mapReady, setMapReady] = useState(false)
+  const mapRef = useRef<google.maps.Map | null>(null)
   const dragIndexRef = useRef<number | null>(null)
+
+  const { isLoaded } = useJsApiLoader({
+    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "",
+    libraries: LIBRARIES,
+  })
 
   // GPS auto-populate origin
   useEffect(() => {
     if (!navigator.geolocation) return
     navigator.geolocation.getCurrentPosition(
       (pos) => setOriginFromGps(pos.coords.latitude, pos.coords.longitude),
-      () => { /* Keep "My Location" label with lat:0,lng:0 — user can manually search */ }
+      () => { /* Keep "My Location" with lat:0,lng:0 — user can manually search */ }
     )
   }, [setOriginFromGps])
 
-  // Draw route polyline when map or route changes
+  // Fit map to route when route updates
   useEffect(() => {
-    if (!mapReady || !mapRef.current || !routeResult) return
-    const sdk = window.mappls
-    if (!sdk) return
-
-    polylineRef.current?.remove?.()
-    polylineRef.current = null
-
-    if (routeResult.geometry.length < 2) return
-
-    try {
-      polylineRef.current = new sdk.Polyline({
-        map: mapRef.current,
-        path: routeResult.geometry.map(p => [p.lat, p.lng]),
-        strokeColor: "#f97316",
-        strokeWeight: 4,
-        strokeOpacity: 0.85,
-      })
-    } catch {
-      // SDK polyline API may differ — silently skip visual update
-    }
-  }, [mapReady, routeResult])
-
-  function handleMapReady(map: any) {
-    mapRef.current = map
-    setMapReady(true)
-  }
+    if (!isLoaded || !mapRef.current || !routeResult || routeResult.geometry.length < 2) return
+    const bounds = new google.maps.LatLngBounds()
+    routeResult.geometry.forEach(p => bounds.extend(p))
+    mapRef.current.fitBounds(bounds, 24)
+  }, [isLoaded, routeResult])
 
   function handleDragStart(index: number) {
-    if (index === 0) return // origin is not reorderable
+    if (index === 0) return
     dragIndexRef.current = index
   }
 
-  function handleDragOver(index: number) {
-    // visual feedback could be added here
-    void index
-  }
+  function handleDragOver(index: number) { void index }
 
   function handleDrop(toIndex: number) {
     const fromIndex = dragIndexRef.current
@@ -108,9 +88,10 @@ export function RoutePlanningStep({ tripId: _tripId, saving, onStartTrip, onSkip
   const hasDestination = stops.some(s => s.order > 0 && (s.lat !== 0 || s.lng !== 0))
   const canStart = hasValidRoute && !routeError && !calculating
 
+  const mapCenter = routeResult?.geometry[0] ?? { lat: 28.6139, lng: 77.209 }
+
   return (
     <div className="flex flex-col flex-1 overflow-hidden">
-      {/* A11y title for the dialog (screen reader only) */}
       <DialogPrimitive.Title className="sr-only">Plan your route</DialogPrimitive.Title>
 
       {/* Header */}
@@ -186,14 +167,26 @@ export function RoutePlanningStep({ tripId: _tripId, saving, onStartTrip, onSkip
         )}
 
         {/* Map preview */}
-        {hasDestination && (
+        {hasDestination && isLoaded && (
           <div className="h-40 rounded-xl overflow-hidden border border-gray-200 relative">
-            <MapplsMap
-              mapId={`route-preview-map`}
-              className="w-full h-full"
-              onMapReady={handleMapReady}
+            <GoogleMap
+              mapContainerClassName="w-full h-full"
+              center={mapCenter}
               zoom={11}
-            />
+              onLoad={map => { mapRef.current = map }}
+              options={{
+                disableDefaultUI: true,
+                gestureHandling: "none",
+                styles: [{ featureType: "poi", stylers: [{ visibility: "off" }] }],
+              }}
+            >
+              {routeResult && routeResult.geometry.length >= 2 && (
+                <Polyline
+                  path={routeResult.geometry}
+                  options={{ strokeColor: "#f97316", strokeWeight: 4, strokeOpacity: 0.85 }}
+                />
+              )}
+            </GoogleMap>
             {calculating && (
               <div className="absolute inset-0 flex items-center justify-center bg-white/60">
                 <Loader2 size={20} className="animate-spin text-orange-500" />

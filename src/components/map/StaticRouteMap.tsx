@@ -1,71 +1,32 @@
 "use client"
 import { useEffect, useRef } from "react"
-import { useMappls } from "@/hooks/useMappls"
+import { GoogleMap, Polyline, useJsApiLoader } from "@react-google-maps/api"
 import type { Waypoint } from "@/types"
+
+const LIBRARIES: ("places" | "geometry")[] = ["places", "geometry"]
 
 interface StaticRouteMapProps {
   waypoints: Waypoint[]
-  mapId?: string
 }
 
-export default function StaticRouteMap({ waypoints, mapId = "static-route-map" }: StaticRouteMapProps) {
-  const containerRef = useRef<HTMLDivElement>(null)
-  const mapRef = useRef<any>(null)
-  const { isReady, mappls } = useMappls()
+export default function StaticRouteMap({ waypoints }: StaticRouteMapProps) {
+  const mapRef = useRef<google.maps.Map | null>(null)
+
+  const { isLoaded } = useJsApiLoader({
+    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "",
+    libraries: LIBRARIES,
+  })
+
+  const center = waypoints.length
+    ? waypoints[Math.floor(waypoints.length / 2)]
+    : { lat: 28.6139, lng: 77.209 }
 
   useEffect(() => {
-    if (!isReady || !mappls || !containerRef.current || !waypoints.length) return
-    if (mapRef.current) return
-
-    const center = waypoints[Math.floor(waypoints.length / 2)]
-    const map = new mappls.Map(containerRef.current, {
-      center: [center.lat, center.lng],
-      zoom: 13,
-      search: false,
-    })
-    mapRef.current = map
-
-    const ro = new ResizeObserver(() => {
-      map.resize?.()
-    })
-    ro.observe(containerRef.current)
-
-    map.on("load", () => {
-      map.resize?.()
-
-      if (waypoints.length >= 2) {
-        try {
-          new mappls.Polyline({
-            map,
-            path: waypoints.map(w => [w.lat, w.lng]),
-            strokeColor: "#F97316",
-            strokeOpacity: 0.85,
-            strokeWeight: 4,
-          })
-        } catch {
-          // Mappls polyline API may vary — skip gracefully
-        }
-      }
-
-      try {
-        const lats = waypoints.map(w => w.lat)
-        const lngs = waypoints.map(w => w.lng)
-        const bounds = [
-          [Math.min(...lats), Math.min(...lngs)],
-          [Math.max(...lats), Math.max(...lngs)],
-        ]
-        map.fitBounds(bounds, { padding: 40 })
-      } catch {
-        // fitBounds may not be available in all SDK versions — ignore
-      }
-    })
-
-    return () => {
-      ro.disconnect()
-      map.remove?.()
-      mapRef.current = null
-    }
-  }, [isReady]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (!isLoaded || !mapRef.current || waypoints.length < 2) return
+    const bounds = new google.maps.LatLngBounds()
+    waypoints.forEach(w => bounds.extend({ lat: w.lat, lng: w.lng }))
+    mapRef.current.fitBounds(bounds, 40)
+  }, [isLoaded, waypoints])
 
   if (!waypoints.length) {
     return (
@@ -75,5 +36,34 @@ export default function StaticRouteMap({ waypoints, mapId = "static-route-map" }
     )
   }
 
-  return <div id={mapId} ref={containerRef} className="w-full h-full" />
+  if (!isLoaded) {
+    return (
+      <div className="h-full w-full bg-gray-100 flex items-center justify-center">
+        <p className="text-sm text-gray-500">Loading map…</p>
+      </div>
+    )
+  }
+
+  return (
+    <GoogleMap
+      mapContainerClassName="w-full h-full"
+      center={center}
+      zoom={13}
+      onLoad={map => { mapRef.current = map }}
+      options={{
+        disableDefaultUI: true,
+        gestureHandling: "none",
+        styles: [{ featureType: "poi", stylers: [{ visibility: "off" }] }],
+      }}
+    >
+      <Polyline
+        path={waypoints.map(w => ({ lat: w.lat, lng: w.lng }))}
+        options={{
+          strokeColor: "#F97316",
+          strokeOpacity: 0.85,
+          strokeWeight: 4,
+        }}
+      />
+    </GoogleMap>
+  )
 }
