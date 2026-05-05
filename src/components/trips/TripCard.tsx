@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Car, MapPin } from "lucide-react";
+import { Car } from "lucide-react";
 import { formatINR } from "@/lib/utils";
 import { formatTripDateRange } from "@/utils/date";
 import type { Trip } from "@/types";
@@ -15,12 +15,7 @@ export function TripCard({ trip }: TripCardProps) {
     <Link href={`/trips/${trip.id}`} aria-label={`Trip: ${trip.title}`}>
       <div className="bg-white rounded-xl border border-gray-200 px-4 py-4 flex items-center justify-between active:bg-gray-50">
         <div className="flex-1 min-w-0 pr-4">
-          <div className="flex items-center gap-1">
-            <h3 className="font-semibold text-gray-900 text-sm truncate">{trip.title}</h3>
-            {trip.hasLiveRoute && (
-              <MapPin size={12} className="text-orange-500 flex-shrink-0" />
-            )}
-          </div>
+          <h3 className="font-semibold text-gray-900 text-sm truncate">{trip.title}</h3>
           <div className="flex items-center gap-2 mt-0.5 text-xs text-gray-500">
             <span>{formatTripDateRange(trip.startDate, trip.endDate)}</span>
             {trip.vehicle ? (

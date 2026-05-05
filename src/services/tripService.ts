@@ -37,7 +37,6 @@ function mapTrip(
     timeTaken: row.timeTaken ?? undefined,
     breakdown,
     totalCost: computeTotalCost(breakdown),
-    hasLiveRoute: row.hasLiveRoute,
     createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),
     vehicle: vehicle
       ? { id: vehicle.id, name: vehicle.name, registrationNumber: vehicle.registrationNumber }
