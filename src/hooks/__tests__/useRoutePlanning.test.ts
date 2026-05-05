@@ -3,9 +3,10 @@ import { renderHook, act } from "@testing-library/react"
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
-// Mock @react-google-maps/api so useJsApiLoader resolves immediately
-vi.mock("@react-google-maps/api", () => ({
-  useJsApiLoader: () => ({ isLoaded: true }),
+// Mock googleMapsLoader so hook sees maps as loaded
+vi.mock("@/lib/googleMapsLoader", () => ({
+  useGoogleMapsLoaded: () => true,
+  GoogleMapsLoader: ({ children }: { children: React.ReactNode }) => children,
 }))
 
 // Mock google.maps global — tests cover state management, not SDK calls

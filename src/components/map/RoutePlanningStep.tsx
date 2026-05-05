@@ -1,15 +1,12 @@
 "use client"
-import { useEffect, useRef, useState } from "react"
-import dynamic from "next/dynamic"
-import { GoogleMap, Polyline, useJsApiLoader } from "@react-google-maps/api"
+import { useEffect, useRef } from "react"
+import { GoogleMap, Polyline } from "@react-google-maps/api"
 import * as DialogPrimitive from "@radix-ui/react-dialog"
 import { AlertTriangle, ChevronLeft, Loader2, Plus } from "lucide-react"
 import { StopListItem } from "@/components/map/StopListItem"
 import { useRoutePlanning, MAX_STOPS } from "@/hooks/useRoutePlanning"
+import { useGoogleMapsLoaded } from "@/lib/googleMapsLoader"
 import type { PlannedStop } from "@/types"
-import type { RouteResult } from "@/hooks/useRoutePlanning"
-
-const LIBRARIES: ("places" | "geometry")[] = ["places", "geometry"]
 
 interface Props {
   tripId: string
@@ -47,11 +44,7 @@ export function RoutePlanningStep({ tripId: _tripId, saving, onStartTrip, onSkip
 
   const mapRef = useRef<google.maps.Map | null>(null)
   const dragIndexRef = useRef<number | null>(null)
-
-  const { isLoaded } = useJsApiLoader({
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "",
-    libraries: LIBRARIES,
-  })
+  const isLoaded = useGoogleMapsLoaded()
 
   // GPS auto-populate origin
   useEffect(() => {

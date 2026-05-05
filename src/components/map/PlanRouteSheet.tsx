@@ -1,12 +1,10 @@
 "use client"
 import { useState, useRef, useEffect } from "react"
-import { useJsApiLoader } from "@react-google-maps/api"
 import { X, Loader2, Search } from "lucide-react"
 import { toast } from "sonner"
 import { buildOfflineNavCache, saveOfflineNavCache } from "@/lib/navCacheDb"
+import { useGoogleMapsLoaded } from "@/lib/googleMapsLoader"
 import type { OfflineNavCache, PlannedStop } from "@/types"
-
-const LIBRARIES: ("places" | "geometry")[] = ["places", "geometry"]
 
 interface Props {
   tripId: string
@@ -30,10 +28,7 @@ export function PlanRouteSheet({ tripId, currentPosition, onActivate, onClose }:
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const autocompleteRef = useRef<google.maps.places.AutocompleteService | null>(null)
 
-  const { isLoaded } = useJsApiLoader({
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "",
-    libraries: LIBRARIES,
-  })
+  const isLoaded = useGoogleMapsLoaded()
 
   useEffect(() => {
     if (isLoaded && !autocompleteRef.current) {
@@ -57,10 +52,7 @@ export function PlanRouteSheet({ tripId, currentPosition, onActivate, onClose }:
         { input: value, componentRestrictions: { country: "in" } },
         (predictions, status) => {
           setIsSearching(false)
-          if (
-            status !== google.maps.places.PlacesServiceStatus.OK ||
-            !predictions
-          ) {
+          if (status !== google.maps.places.PlacesServiceStatus.OK || !predictions) {
             setSuggestions([])
             return
           }
