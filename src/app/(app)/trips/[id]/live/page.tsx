@@ -2,10 +2,10 @@
 import dynamic from "next/dynamic";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { useJsApiLoader } from "@react-google-maps/api";
 import { Crosshair, Radio, Square } from "lucide-react";
 import { useLiveTrip } from "@/hooks/useLiveTrip";
 import { useNavigation } from "@/hooks/useNavigation";
+import { useGoogleMapsLoaded } from "@/lib/googleMapsLoader";
 import { StartSessionSheet } from "@/components/map/StartSessionSheet";
 import { NavigationBanner } from "@/components/map/NavigationBanner";
 import { PlanRouteSheet } from "@/components/map/PlanRouteSheet";
@@ -13,8 +13,6 @@ import { StopChipsStrip } from "@/components/map/StopChipsStrip";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { formatDistance, formatElapsed, formatSpeed } from "@/utils/geo";
 import type { Waypoint } from "@/types";
-
-const LIBRARIES: ("places" | "geometry")[] = ["places", "geometry"];
 
 const GoogleMapView = dynamic(() => import("@/components/map/GoogleMapView"), {
   ssr: false,
@@ -45,6 +43,7 @@ export default function LiveTripPage({
   params: { id: string };
 }) {
   const router = useRouter();
+  const mapsLoaded = useGoogleMapsLoaded();
   const [autoCenter, setAutoCenter] = useState(true);
   const [showStopModal, setShowStopModal] = useState(false);
   const [showStartSessionSheet, setShowStartSessionSheet] = useState(false);
@@ -61,11 +60,6 @@ export default function LiveTripPage({
   const plannedPolylineRef = useRef<google.maps.Polyline | null>(null);
   const mapReadyRef = useRef(false);
   const [mapReady, setMapReady] = useState(false);
-
-  const { isLoaded: mapsLoaded } = useJsApiLoader({
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "",
-    libraries: LIBRARIES,
-  });
 
   const { startTracking, stopTracking, pauseTracking, currentPosition, pendingCount } =
     useLiveTrip(params.id);
@@ -169,7 +163,6 @@ export default function LiveTripPage({
 
   const handleStop = async () => {
     setIsStopping(true);
-    // Clean up polylines before navigation
     livePolylineRef.current?.setMap(null);
     plannedPolylineRef.current?.setMap(null);
     await stopTracking();
@@ -204,7 +197,7 @@ export default function LiveTripPage({
         />
       )}
 
-      {/* Offline / pending banner (below nav banner) */}
+      {/* Offline / pending banner */}
       {(!isOnline || pendingCount > 0) && (
         <div
           className={`absolute left-0 right-0 bg-amber-500 text-white text-sm text-center py-2 z-[1000] ${
@@ -228,7 +221,7 @@ export default function LiveTripPage({
         </div>
       )}
 
-      {/* Mid-trip Plan Route button — visible only when no route was planned */}
+      {/* Mid-trip Plan Route button */}
       {!hasNavigation && navPosition && (
         <button
           onClick={() => setShowPlanRouteSheet(true)}

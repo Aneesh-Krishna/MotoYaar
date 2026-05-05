@@ -1,9 +1,8 @@
 "use client"
 import { useEffect, useRef } from "react"
-import { GoogleMap, Polyline, useJsApiLoader } from "@react-google-maps/api"
+import { GoogleMap, Polyline } from "@react-google-maps/api"
+import { useGoogleMapsLoaded } from "@/lib/googleMapsLoader"
 import type { Waypoint } from "@/types"
-
-const LIBRARIES: ("places" | "geometry")[] = ["places", "geometry"]
 
 interface StaticRouteMapProps {
   waypoints: Waypoint[]
@@ -11,11 +10,7 @@ interface StaticRouteMapProps {
 
 export default function StaticRouteMap({ waypoints }: StaticRouteMapProps) {
   const mapRef = useRef<google.maps.Map | null>(null)
-
-  const { isLoaded } = useJsApiLoader({
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "",
-    libraries: LIBRARIES,
-  })
+  const isLoaded = useGoogleMapsLoaded()
 
   const center = waypoints.length
     ? waypoints[Math.floor(waypoints.length / 2)]

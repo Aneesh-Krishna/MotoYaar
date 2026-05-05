@@ -2,9 +2,9 @@
 // SSR constraint: always load via next/dynamic({ ssr: false }) — never statically import in a server component.
 // Usage: const GoogleMapView = dynamic(() => import("@/components/map/GoogleMapView"), { ssr: false })
 import { useRef, useCallback } from "react"
-import { GoogleMap, useJsApiLoader } from "@react-google-maps/api"
+import { GoogleMap } from "@react-google-maps/api"
+import { useGoogleMapsLoaded } from "@/lib/googleMapsLoader"
 
-const LIBRARIES: ("places" | "geometry")[] = ["places", "geometry"]
 const DEFAULT_CENTER = { lat: 28.6139, lng: 77.209 }
 
 interface GoogleMapViewProps {
@@ -21,11 +21,7 @@ export default function GoogleMapView({
   onMapReady,
 }: GoogleMapViewProps) {
   const mapRef = useRef<google.maps.Map | null>(null)
-
-  const { isLoaded } = useJsApiLoader({
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "",
-    libraries: LIBRARIES,
-  })
+  const isLoaded = useGoogleMapsLoaded()
 
   const handleLoad = useCallback(
     (map: google.maps.Map) => {
