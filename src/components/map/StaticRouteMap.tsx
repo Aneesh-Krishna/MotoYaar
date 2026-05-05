@@ -3,7 +3,12 @@ import { useEffect, useRef } from "react"
 import { useMappls } from "@/hooks/useMappls"
 import type { Waypoint } from "@/types"
 
-export default function StaticRouteMap({ waypoints }: { waypoints: Waypoint[] }) {
+interface StaticRouteMapProps {
+  waypoints: Waypoint[]
+  mapId?: string
+}
+
+export default function StaticRouteMap({ waypoints, mapId = "static-route-map" }: StaticRouteMapProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<any>(null)
   const { isReady, mappls } = useMappls()
@@ -20,8 +25,14 @@ export default function StaticRouteMap({ waypoints }: { waypoints: Waypoint[] })
     })
     mapRef.current = map
 
+    const ro = new ResizeObserver(() => {
+      map.resize?.()
+    })
+    ro.observe(containerRef.current)
+
     map.on("load", () => {
       map.resize?.()
+
       if (waypoints.length >= 2) {
         try {
           new mappls.Polyline({
@@ -36,7 +47,6 @@ export default function StaticRouteMap({ waypoints }: { waypoints: Waypoint[] })
         }
       }
 
-      // Fit bounds to all waypoints
       try {
         const lats = waypoints.map(w => w.lat)
         const lngs = waypoints.map(w => w.lng)
@@ -51,6 +61,7 @@ export default function StaticRouteMap({ waypoints }: { waypoints: Waypoint[] })
     })
 
     return () => {
+      ro.disconnect()
       map.remove?.()
       mapRef.current = null
     }
@@ -64,5 +75,5 @@ export default function StaticRouteMap({ waypoints }: { waypoints: Waypoint[] })
     )
   }
 
-  return <div id="static-route-map" ref={containerRef} className="w-full h-full" />
+  return <div id={mapId} ref={containerRef} className="w-full h-full" />
 }
