@@ -57,7 +57,7 @@ export default function TripOverviewTab({ trip, linkedExpense }: Props) {
 
       {showDownloadSheet && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end">
-          <div className="w-full bg-white rounded-t-xl">
+          <div className="w-full bg-white rounded-t-xl flex flex-col" style={{ height: "90vh" }}>
             <div className="flex justify-between items-center p-4 border-b">
               <h2 className="text-lg font-semibold">Download Offline Map</h2>
               <button

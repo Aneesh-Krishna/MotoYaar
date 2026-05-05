@@ -74,7 +74,7 @@ export default function OfflineMapSheet({
   }, [bbox, cancelled, sizeMB, tripId, onComplete]);
 
   return (
-    <div className="h-[80vh] flex flex-col">
+    <div className="flex-1 flex flex-col min-h-0">
       <BboxSelectorMap onBboxChange={setBbox} />
       {bbox && (
         <div className="p-4 space-y-3">

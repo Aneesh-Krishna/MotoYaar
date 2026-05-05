@@ -36,6 +36,7 @@ export default function BboxSelectorMap({ onBboxChange }: BboxSelectorMapProps) 
     mapRef.current = map
 
     map.on("load", () => {
+      map.resize?.()
       const canvas = map.getCanvas?.() ?? containerRef.current
       if (!canvas) return
 
@@ -133,8 +134,8 @@ export default function BboxSelectorMap({ onBboxChange }: BboxSelectorMapProps) 
   }, [isReady]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div className="relative flex-1 min-h-0">
-      <div ref={containerRef} className="w-full h-full" />
+    <div className="relative flex-1 min-h-0" style={{ minHeight: "300px" }}>
+      <div ref={containerRef} className="w-full h-full absolute inset-0" />
       <div className="absolute bottom-2 left-0 right-0 flex justify-center pointer-events-none">
         <span className="bg-white/90 text-xs text-gray-600 px-3 py-1 rounded-full shadow">
           Hold Shift + drag to select an area

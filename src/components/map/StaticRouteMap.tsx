@@ -21,6 +21,7 @@ export default function StaticRouteMap({ waypoints }: { waypoints: Waypoint[] })
     mapRef.current = map
 
     map.on("load", () => {
+      map.resize?.()
       if (waypoints.length >= 2) {
         try {
           new mappls.Polyline({
@@ -63,5 +64,5 @@ export default function StaticRouteMap({ waypoints }: { waypoints: Waypoint[] })
     )
   }
 
-  return <div ref={containerRef} className="w-full h-full" />
+  return <div id="static-route-map" ref={containerRef} className="w-full h-full" />
 }
