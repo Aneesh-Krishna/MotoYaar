@@ -29,23 +29,30 @@ export interface RouteResult {
 export const MAX_STOPS = 8
 
 async function fetchPlaces(query: string): Promise<PlaceResult[]> {
-  try {
-    const res = await fetch(
-      `https://atlas.mappls.com/api/places/search/json?query=${encodeURIComponent(query)}&region=IND&username=mappls`,
-      { headers: { Authorization: `Bearer ${process.env.NEXT_PUBLIC_MAPPLS_API_KEY}` } }
-    )
-    if (!res.ok) return []
-    const data = await res.json()
-    return (data.suggestedLocations ?? []).map((loc: any) => ({
-      id: loc.eLoc,
-      name: loc.placeName,
-      address: loc.placeAddress,
-      lat: parseFloat(loc.latitude),
-      lng: parseFloat(loc.longitude),
-    }))
-  } catch {
-    return []
-  }
+  return new Promise((resolve) => {
+    const sdk = (window as any).mappls
+    if (!sdk?.search) { resolve([]); return }
+
+    try {
+      sdk.search(
+        { keywords: query, region: "IND" },
+        (data: any) => {
+          if (!Array.isArray(data)) { resolve([]); return }
+          resolve(
+            data.map((loc: any) => ({
+              id: loc.eLoc ?? loc.placeName,
+              name: loc.placeName ?? "",
+              address: loc.placeAddress ?? "",
+              lat: parseFloat(loc.latitude ?? "0"),
+              lng: parseFloat(loc.longitude ?? "0"),
+            }))
+          )
+        }
+      )
+    } catch {
+      resolve([])
+    }
+  })
 }
 
 const INITIAL_STOPS: PlannedStop[] = [
