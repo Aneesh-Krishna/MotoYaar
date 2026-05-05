@@ -33,7 +33,10 @@ export default function MapplsMap({
     })
 
     mapRef.current = map
-    map.on("load", () => onMapReady?.(map))
+    map.on("load", () => {
+      map.resize?.()
+      onMapReady?.(map)
+    })
 
     return () => {
       map.remove?.()

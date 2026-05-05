@@ -53,7 +53,7 @@ export function StartLiveTripSheet({ open, onClose, preselectedTripId }: Props) 
       setTripsLoading(true);
       try {
         const all = await apiRequest<Trip[]>("/trips");
-        setTrips(all.filter((t) => !t.hasLiveRoute));
+        setTrips(all);
       } catch {
         toast.error("Could not load trips.");
       } finally {
@@ -76,6 +76,7 @@ export function StartLiveTripSheet({ open, onClose, preselectedTripId }: Props) 
           body: JSON.stringify({
             title: newTitle.trim(),
             startDate: new Date().toISOString().split("T")[0],
+            breakdown: [],
           }),
         });
         setSelectedTripId(trip.id);
