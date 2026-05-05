@@ -49,11 +49,13 @@ export default function RootLayout({
     <html lang="en" className={inter.variable}>
       <body>
         <Providers>{children}</Providers>
-        <Script
-          id="mappls-sdk"
-          src={`https://apis.mappls.com/advancedmaps/api/${process.env.NEXT_PUBLIC_MAPPLS_API_KEY}/map_sdk?layer=vector&v=3.0&libraries=direction`}
-          strategy="afterInteractive"
-        />
+        {process.env.NEXT_PUBLIC_MAPPLS_API_KEY && (
+          <Script
+            id="mappls-sdk"
+            src={`https://apis.mappls.com/advancedmaps/api/${process.env.NEXT_PUBLIC_MAPPLS_API_KEY}/map_sdk?layer=vector&v=3.0&libraries=direction`}
+            strategy="afterInteractive"
+          />
+        )}
       </body>
     </html>
   );
