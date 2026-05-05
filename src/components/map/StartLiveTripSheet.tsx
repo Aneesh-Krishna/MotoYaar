@@ -53,7 +53,7 @@ export function StartLiveTripSheet({ open, onClose, preselectedTripId }: Props) 
       setTripsLoading(true);
       try {
         const all = await apiRequest<Trip[]>("/trips");
-        setTrips(all);
+        setTrips(all.filter((t) => !t.hasLiveRoute));
       } catch {
         toast.error("Could not load trips.");
       } finally {

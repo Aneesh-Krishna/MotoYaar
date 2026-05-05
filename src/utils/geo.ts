@@ -44,15 +44,25 @@ export async function checkGeolocationPermission(): Promise<boolean> {
   if (!("geolocation" in navigator)) return false;
   try {
     const perm = await navigator.permissions.query({ name: "geolocation" });
+    if (perm.state === "granted") return true;
     if (perm.state === "denied") return false;
+    // "prompt" — trigger the browser prompt and wait for user response
     return new Promise((resolve) => {
       navigator.geolocation.getCurrentPosition(
         () => resolve(true),
         () => resolve(false),
-        { timeout: 5000 }
+        { timeout: 15000 }
       );
     });
   } catch {
-    return false;
+    // Permissions API not supported (e.g. some older mobile browsers) —
+    // fall back to a direct getCurrentPosition call
+    return new Promise((resolve) => {
+      navigator.geolocation.getCurrentPosition(
+        () => resolve(true),
+        () => resolve(false),
+        { timeout: 15000 }
+      );
+    });
   }
 }
