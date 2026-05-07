@@ -1,6 +1,6 @@
 import { db } from "@/lib/db/client";
-import { posts, postReactions, comments, postReports, adminSettings, users } from "@/lib/db/schema";
-import { eq, desc, and, sql, ilike, or, gte, type SQL } from "drizzle-orm";
+import { posts, postReactions, comments, postReports, adminSettings, users, clubMembers } from "@/lib/db/schema";
+import { eq, desc, and, sql, ilike, or, gte, isNull, type SQL } from "drizzle-orm";
 import { NotFoundError, ForbiddenError, BadRequestError, ConflictError } from "@/lib/errors";
 import type { FeedPost, Comment, PostDetail } from "@/types";
 import type { CreatePostInput } from "@/lib/validations/post";
@@ -167,7 +167,11 @@ export const communityService = {
       authorProfileImageUrl: users.profileImageUrl,
     };
 
-    const regularConditions: SQL[] = [eq(posts.isHidden, false), eq(posts.isPinned, false)];
+    const regularConditions: SQL[] = [
+      eq(posts.isHidden, false),
+      eq(posts.isPinned, false),
+      isNull(posts.clubId),
+    ];
     if (tag) regularConditions.push(sql`${posts.tags} @> ARRAY[${tag}]::text[]`);
     if (q) regularConditions.push(or(ilike(posts.title, `%${q}%`), ilike(posts.description, `%${q}%`))!);
 
@@ -179,7 +183,7 @@ export const communityService = {
       db.select(selectFields)
         .from(posts)
         .leftJoin(users, eq(posts.userId, users.id))
-        .where(eq(posts.isPinned, true))
+        .where(and(eq(posts.isPinned, true), isNull(posts.clubId)))
         .orderBy(desc(posts.createdAt)),
       db.select(selectFields)
         .from(posts)
@@ -204,6 +208,17 @@ export const communityService = {
   },
 
   async createPost(userId: string, data: CreatePostInput): Promise<FeedPost> {
+    if (data.clubId) {
+      const membership = await db.query.clubMembers.findFirst({
+        where: and(
+          eq(clubMembers.clubId, data.clubId),
+          eq(clubMembers.userId, userId),
+          eq(clubMembers.status, "active")
+        ),
+      });
+      if (!membership) throw new ForbiddenError("You are not an active member of this club");
+    }
+
     const sixtySecondsAgo = new Date(Date.now() - 60_000);
     const duplicate = await db.query.posts.findFirst({
       where: and(
@@ -224,6 +239,7 @@ export const communityService = {
         images: data.imageKeys ?? [],
         links: data.link ? [data.link] : [],
         tags: data.tags ?? [],
+        clubId: data.clubId ?? null,
       })
       .returning();
 

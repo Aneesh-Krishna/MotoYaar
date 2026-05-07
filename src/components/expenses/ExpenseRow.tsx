@@ -54,9 +54,14 @@ export function ExpenseRow({ expense, onTap }: ExpenseRowProps) {
           {format(new Date(expense.date), "d MMM yyyy")}
         </span>
       </div>
-      <div className="flex items-center gap-2 text-right">
-        <span className="font-semibold text-gray-900">{formatINR(expense.price)}</span>
-        {expense.receiptUrl && <Paperclip size={14} className="text-gray-400" />}
+      <div className="flex flex-col items-end gap-0.5">
+        <div className="flex items-center gap-2">
+          <span className="font-semibold text-gray-900">{formatINR(expense.price)}</span>
+          {expense.receiptUrl && <Paperclip size={14} className="text-gray-400" />}
+        </div>
+        {expense.kmpl != null && (
+          <span className="text-xs text-yellow-700 font-medium">{expense.kmpl.toFixed(1)} kmpl</span>
+        )}
       </div>
     </button>
   );

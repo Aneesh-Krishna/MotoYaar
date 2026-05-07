@@ -35,6 +35,7 @@ export const users = pgTable(
     pushNotificationsEnabled: boolean("push_notifications_enabled").notNull().default(true),
     emailNotificationsEnabled: boolean("email_notifications_enabled").notNull().default(true),
     walkthroughSeen: boolean("walkthrough_seen").notNull().default(false),
+    historyOptOut: boolean("history_opt_out").notNull().default(false),
     status: text("status").notNull().default("active"),
     suspendedUntil: timestamp("suspended_until", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -146,6 +147,57 @@ export const trips = pgTable(
   })
 );
 
+// ─── Service Centers ─────────────────────────────────────────────────────────
+export const serviceCenters = pgTable(
+  "service_centers",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    city: text("city").notNull(),
+    pincode: text("pincode"),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    avgRating: numeric("avg_rating", { precision: 3, scale: 2 }),
+    reviewCount: integer("review_count").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    cityIdx: index("idx_service_centers_city").on(table.city),
+    nameSearchIdx: index("idx_service_centers_name").using("gin", sql`to_tsvector('english', ${table.name})`),
+  })
+);
+
+export const serviceCenterReviews = pgTable(
+  "service_center_reviews",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    serviceCenterId: uuid("service_center_id")
+      .notNull()
+      .references(() => serviceCenters.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    rating: integer("rating").notNull(),
+    reviewText: text("review_text"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    serviceCenterUserUnique: uniqueIndex("service_center_reviews_sc_id_user_id_unique").on(
+      table.serviceCenterId,
+      table.userId
+    ),
+    serviceCenterIdIdx: index("idx_service_center_reviews_sc_id").on(table.serviceCenterId),
+    ratingCheck: check(
+      "service_center_reviews_rating_check",
+      sql`${table.rating} BETWEEN 1 AND 5`
+    ),
+    reviewTextCheck: check(
+      "service_center_reviews_review_text_check",
+      sql`${table.reviewText} IS NULL OR char_length(${table.reviewText}) <= 100`
+    ),
+  })
+);
+
 // ─── Expenses ─────────────────────────────────────────────────────────────────
 export const expenses = pgTable(
   "expenses",
@@ -164,6 +216,12 @@ export const expenses = pgTable(
     comment: text("comment"),
     receiptUrl: text("receipt_url"),
     receiptKey: text("receipt_key"),
+    litresFilled: numeric("litres_filled", { precision: 6, scale: 2 }),
+    odometerKm: integer("odometer_km"),
+    kmpl: numeric("kmpl", { precision: 5, scale: 2 }),
+    serviceCenterId: uuid("service_center_id").references(() => serviceCenters.id, { onDelete: "set null" }),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    deletedByOwner: boolean("deleted_by_owner").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
@@ -243,6 +301,7 @@ export const posts = pgTable(
     isPinned: boolean("is_pinned").notNull().default(false),
     isHidden: boolean("is_hidden").notNull().default(false),
     score: doublePrecision("score").notNull().default(0),
+    clubId: uuid("club_id").references(() => clubs.id, { onDelete: "cascade" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -442,18 +501,211 @@ export const aiReports = pgTable(
 );
 
 
+// ─── Service Reminders ────────────────────────────────────────────────────────
+export const serviceReminders = pgTable(
+  "service_reminders",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    vehicleId: uuid("vehicle_id")
+      .notNull()
+      .references(() => vehicles.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    serviceType: text("service_type").notNull(),
+    kmInterval: integer("km_interval"),
+    dayInterval: integer("day_interval"),
+    lastServicedKm: integer("last_serviced_km"),
+    lastServicedAt: date("last_serviced_at"),
+    notifiedAt: timestamp("notified_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    vehicleIdIdx: index("idx_service_reminders_vehicle_id").on(table.vehicleId),
+    userIdIdx: index("idx_service_reminders_user_id").on(table.userId),
+  })
+);
+
+// ─── Group Expense Sessions ───────────────────────────────────────────────────
+export const groupExpenseSessions = pgTable(
+  "group_expense_sessions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    title: text("title"),
+    tripId: uuid("trip_id").references(() => trips.id, { onDelete: "set null" }),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    status: text("status").notNull().default("active"),
+    currency: text("currency").notNull().default("INR"),
+    inviteCode: text("invite_code").notNull().unique(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    createdByIdx: index("idx_ges_created_by").on(table.createdBy),
+    inviteCodeIdx: index("idx_ges_invite_code").on(table.inviteCode),
+    statusCheck: check(
+      "group_expense_sessions_status_check",
+      sql`${table.status} IN ('active', 'archived')`
+    ),
+  })
+);
+
+export const groupExpenseSessionMembers = pgTable(
+  "group_expense_session_members",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => groupExpenseSessions.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    joinedAt: timestamp("joined_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    sessionIdIdx: index("idx_gesm_session_id").on(table.sessionId),
+    sessionUserUnique: uniqueIndex("gesm_session_id_user_id_unique").on(
+      table.sessionId,
+      table.userId
+    ),
+  })
+);
+
+// ─── Group Expense Items ──────────────────────────────────────────────────────
+export const groupExpenseItems = pgTable(
+  "group_expense_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => groupExpenseSessions.id, { onDelete: "cascade" }),
+    loggedBy: uuid("logged_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    paidBy: uuid("paid_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
+    description: text("description").notNull(),
+    category: text("category").notNull(),
+    includedUserIds: text("included_user_ids").array().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    sessionIdIdx: index("idx_gei_session_id").on(table.sessionId),
+    categoryCheck: check(
+      "group_expense_items_category_check",
+      sql`${table.category} IN ('Food', 'Fuel', 'Stay', 'Toll', 'Misc')`
+    ),
+  })
+);
+
+// ─── Group Expense Settlements ────────────────────────────────────────────────
+export const groupExpenseSettlements = pgTable(
+  "group_expense_settlements",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => groupExpenseSessions.id, { onDelete: "cascade" }),
+    fromUserId: uuid("from_user_id")
+      .notNull()
+      .references(() => users.id),
+    toUserId: uuid("to_user_id")
+      .notNull()
+      .references(() => users.id),
+    amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
+    settledAt: timestamp("settled_at", { withTimezone: true }).notNull().defaultNow(),
+    settledBy: uuid("settled_by")
+      .notNull()
+      .references(() => users.id),
+  },
+  (table) => ({
+    sessionIdIdx: index("idx_gest_session_id").on(table.sessionId),
+  })
+);
+
+// ─── Clubs ────────────────────────────────────────────────────────────────────
+export const clubs = pgTable(
+  "clubs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull().unique(),
+    city: text("city").notNull(),
+    description: text("description"),
+    logoUrl: text("logo_url"),
+    inviteCode: text("invite_code").notNull().unique(),
+    joinPolicy: text("join_policy").notNull().default("approval"),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    cityIdx: index("idx_clubs_city").on(table.city),
+    joinPolicyCheck: check(
+      "clubs_join_policy_check",
+      sql`${table.joinPolicy} IN ('approval', 'open')`
+    ),
+  })
+);
+
+export const clubMembers = pgTable(
+  "club_members",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    clubId: uuid("club_id")
+      .notNull()
+      .references(() => clubs.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    role: text("role").notNull().default("member"),
+    status: text("status").notNull().default("active"),
+    joinedAt: timestamp("joined_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    clubIdIdx: index("idx_club_members_club_id").on(table.clubId),
+    userIdIdx: index("idx_club_members_user_id").on(table.userId),
+    clubUserUnique: uniqueIndex("club_members_club_id_user_id_unique").on(table.clubId, table.userId),
+    roleCheck: check(
+      "club_members_role_check",
+      sql`${table.role} IN ('admin', 'member')`
+    ),
+    statusCheck: check(
+      "club_members_status_check",
+      sql`${table.status} IN ('active', 'pending', 'removed')`
+    ),
+  })
+);
+
 // ─── Relations ────────────────────────────────────────────────────────────────
 
 export const usersRelations = relations(users, ({ many }) => ({
   posts: many(posts),
   comments: many(comments),
   postReactions: many(postReactions),
+  clubMemberships: many(clubMembers),
+}));
+
+export const clubsRelations = relations(clubs, ({ one, many }) => ({
+  creator: one(users, { fields: [clubs.createdBy], references: [users.id] }),
+  members: many(clubMembers),
+  posts: many(posts),
+}));
+
+export const clubMembersRelations = relations(clubMembers, ({ one }) => ({
+  club: one(clubs, { fields: [clubMembers.clubId], references: [clubs.id] }),
+  user: one(users, { fields: [clubMembers.userId], references: [users.id] }),
 }));
 
 export const postsRelations = relations(posts, ({ one, many }) => ({
   user: one(users, { fields: [posts.userId], references: [users.id] }),
   reactions: many(postReactions),
   comments: many(comments),
+  club: one(clubs, { fields: [posts.clubId], references: [clubs.id] }),
 }));
 
 export const postReactionsRelations = relations(postReactions, ({ one }) => ({

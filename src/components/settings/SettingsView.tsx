@@ -16,12 +16,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Switch } from "@/components/ui/switch";
 
 interface Props {
   initialCurrency: string;
   initialNotificationWindowDays: number;
   initialEmailNotificationsEnabled: boolean;
   initialDocumentStoragePreference: "parse_only" | "full_storage";
+  initialHistoryOptOut: boolean;
 }
 
 function SectionHeader({ title }: { title: string }) {
@@ -164,11 +166,51 @@ function DeleteAccountAction() {
   );
 }
 
+function CommunityHistoryToggle({ initialHistoryOptOut }: { initialHistoryOptOut: boolean }) {
+  const [optOut, setOptOut] = useState(initialHistoryOptOut);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleChange = async (checked: boolean) => {
+    const newOptOut = !checked;
+    setOptOut(newOptOut);
+    setIsSaving(true);
+    try {
+      const res = await fetch("/api/users/me", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ historyOptOut: newOptOut }),
+      });
+      if (!res.ok) throw new Error("Request failed");
+    } catch {
+      setOptOut(!newOptOut);
+      toast.error("Failed to update setting");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="flex items-center justify-between px-4 py-4">
+      <div className="flex-1 pr-4">
+        <p className="text-sm font-medium text-gray-700">Include my vehicle data in community history lookups</p>
+        <p className="text-xs text-gray-500">Allow others to see your logged service history when searching by registration number</p>
+      </div>
+      <Switch
+        checked={!optOut}
+        onCheckedChange={handleChange}
+        disabled={isSaving}
+        aria-label="Include vehicle data in community history"
+      />
+    </div>
+  );
+}
+
 export function SettingsView({
   initialCurrency,
   initialNotificationWindowDays,
   initialEmailNotificationsEnabled,
   initialDocumentStoragePreference,
+  initialHistoryOptOut,
 }: Props) {
   return (
     <div className="pb-20">
@@ -193,6 +235,7 @@ export function SettingsView({
       <div className="space-y-3">
         <DocumentStorageSection currentPreference={initialDocumentStoragePreference} />
         <div className="bg-white divide-y divide-gray-100 border-y border-gray-200">
+          <CommunityHistoryToggle initialHistoryOptOut={initialHistoryOptOut} />
           <PrivacyPolicyLink />
           <DeleteStoredDocumentsAction />
           <DeleteAccountAction />

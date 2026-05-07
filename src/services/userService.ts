@@ -19,6 +19,7 @@ export const userService = {
       notificationWindowDays: number;
       emailNotificationsEnabled: boolean;
       pushNotificationsEnabled: boolean;
+      historyOptOut: boolean;
     }>
   ) {
     if (data.username) {

@@ -13,12 +13,18 @@ const mockDeleteChain = {
   where: vi.fn().mockResolvedValue(undefined),
 };
 
+const mockUpdateChain = {
+  set: vi.fn().mockReturnThis(),
+  where: vi.fn().mockResolvedValue(undefined),
+};
+
 vi.mock("@/lib/db/client", () => ({
   db: {
     query: {
       expenses: { findFirst: mockFindFirst },
     },
     delete: vi.fn(() => mockDeleteChain),
+    update: vi.fn(() => mockUpdateChain),
   },
 }));
 
@@ -46,6 +52,7 @@ function makeDbRow(overrides: Partial<{
   tripId: string | null;
   receiptUrl: string | null;
   receiptKey: string | null;
+  reason: string;
 }> = {}) {
   return {
     id: EXPENSE_ID,
@@ -55,7 +62,7 @@ function makeDbRow(overrides: Partial<{
     price: "500.00",
     currency: "INR",
     date: "2026-03-21",
-    reason: "Service",
+    reason: overrides.reason ?? "Service",
     whereText: null,
     comment: null,
     receiptUrl: overrides.receiptUrl ?? null,
@@ -70,15 +77,31 @@ describe("expenseService.delete", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockDeleteChain.where.mockResolvedValue(undefined);
+    mockUpdateChain.set.mockReturnThis();
+    mockUpdateChain.where.mockResolvedValue(undefined);
     mockDeleteObject.mockResolvedValue(undefined);
   });
 
-  it("deletes expense for owner", async () => {
-    mockFindFirst.mockResolvedValue(makeDbRow());
+  it("soft-deletes service expense for owner (no hard delete, no R2)", async () => {
+    mockFindFirst.mockResolvedValue(makeDbRow({ reason: "Service" }));
+
+    await expect(expenseService.delete(EXPENSE_ID, USER_ID)).resolves.toBeUndefined();
+
+    expect(mockUpdateChain.set).toHaveBeenCalledWith(
+      expect.objectContaining({ deletedByOwner: true })
+    );
+    expect(mockUpdateChain.where).toHaveBeenCalled();
+    expect(mockDeleteChain.where).not.toHaveBeenCalled();
+    expect(mockDeleteObject).not.toHaveBeenCalled();
+  });
+
+  it("hard-deletes non-service expense for owner", async () => {
+    mockFindFirst.mockResolvedValue(makeDbRow({ reason: "Fuel" }));
 
     await expect(expenseService.delete(EXPENSE_ID, USER_ID)).resolves.toBeUndefined();
 
     expect(mockDeleteChain.where).toHaveBeenCalled();
+    expect(mockUpdateChain.set).not.toHaveBeenCalled();
   });
 
   it("throws NotFoundError when expense does not exist", async () => {
@@ -87,6 +110,7 @@ describe("expenseService.delete", () => {
     await expect(expenseService.delete(EXPENSE_ID, USER_ID)).rejects.toThrow(NotFoundError);
 
     expect(mockDeleteChain.where).not.toHaveBeenCalled();
+    expect(mockUpdateChain.where).not.toHaveBeenCalled();
   });
 
   it("throws ForbiddenError for non-owner", async () => {
@@ -105,9 +129,9 @@ describe("expenseService.delete", () => {
     expect(mockDeleteChain.where).not.toHaveBeenCalled();
   });
 
-  it("deletes receipt from R2 before removing expense record", async () => {
+  it("deletes receipt from R2 before hard-deleting non-service expense", async () => {
     mockFindFirst.mockResolvedValue(
-      makeDbRow({ receiptKey: RECEIPT_KEY, receiptUrl: RECEIPT_KEY })
+      makeDbRow({ reason: "Fuel", receiptKey: RECEIPT_KEY, receiptUrl: RECEIPT_KEY })
     );
 
     await expenseService.delete(EXPENSE_ID, USER_ID);
@@ -116,9 +140,9 @@ describe("expenseService.delete", () => {
     expect(mockDeleteChain.where).toHaveBeenCalled();
   });
 
-  it("still deletes expense record when R2 deletion fails", async () => {
+  it("still hard-deletes non-service expense when R2 deletion fails", async () => {
     mockFindFirst.mockResolvedValue(
-      makeDbRow({ receiptKey: RECEIPT_KEY, receiptUrl: RECEIPT_KEY })
+      makeDbRow({ reason: "Others", receiptKey: RECEIPT_KEY, receiptUrl: RECEIPT_KEY })
     );
     mockDeleteObject.mockRejectedValue(new Error("R2 error"));
 
@@ -128,8 +152,8 @@ describe("expenseService.delete", () => {
     expect(mockDeleteChain.where).toHaveBeenCalled();
   });
 
-  it("skips R2 deletion when expense has no receipt", async () => {
-    mockFindFirst.mockResolvedValue(makeDbRow());
+  it("skips R2 deletion when non-service expense has no receipt", async () => {
+    mockFindFirst.mockResolvedValue(makeDbRow({ reason: "Fuel" }));
 
     await expenseService.delete(EXPENSE_ID, USER_ID);
 
