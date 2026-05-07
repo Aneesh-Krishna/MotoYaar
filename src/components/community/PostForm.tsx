@@ -28,6 +28,8 @@ export interface PostFormProps {
   submitLabel?: string;
   loadingLabel?: string;
   onImageUpload: (file: File) => Promise<string>;
+  clubId?: string;
+  clubName?: string;
 }
 
 interface ImagePreview {
@@ -41,6 +43,8 @@ export function PostForm({
   submitLabel = "Post",
   loadingLabel = "Posting…",
   onImageUpload,
+  clubId,
+  clubName,
 }: PostFormProps) {
   const {
     register,
@@ -56,6 +60,7 @@ export function PostForm({
       imageKeys: initialValues?.imageKeys ?? [],
       link: initialValues?.link ?? "",
       tags: initialValues?.tags ?? [],
+      clubId: clubId ?? initialValues?.clubId,
     },
   });
 
@@ -136,6 +141,14 @@ export function PostForm({
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+      {/* Club scope indicator */}
+      {clubId && clubName && (
+        <div className="flex items-center gap-2 rounded-md bg-primary/10 border border-primary/20 px-3 py-2 text-sm text-primary">
+          <span className="font-medium">Posting to:</span>
+          <span>{clubName}</span>
+        </div>
+      )}
+
       {/* Title */}
       <div className="space-y-1.5">
         <label htmlFor="title" className="block text-sm font-medium text-foreground">

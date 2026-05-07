@@ -7,6 +7,7 @@ import {
   UserPlus,
   Settings,
   Instagram,
+  Wrench,
 } from "lucide-react";
 import { getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
@@ -155,6 +156,12 @@ export default async function ProfilePage() {
             icon={UserPlus}
             label="Vehicle Sharing"
             description="Invite others to view your vehicles"
+          />
+          <ProfileActionCard
+            href="/find-mechanic"
+            icon={Wrench}
+            label="Find a Mechanic"
+            description="Search and review service centers near you"
           />
         </section>
 

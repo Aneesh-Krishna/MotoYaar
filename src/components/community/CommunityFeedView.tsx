@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Search, Tag, Users, X } from "lucide-react";
+import { Search, Tag, Users, X, History, Shield } from "lucide-react";
+import Link from "next/link";
 import { PostCard } from "@/components/ui/PostCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { cn } from "@/lib/utils";
@@ -171,8 +172,15 @@ export function CommunityFeedView({ initialPosts, initialHasMore, isAuthenticate
           )}
         </div>
 
-        {/* Sort chips */}
+        {/* Sort chips + Clubs shortcut */}
         <div className="flex gap-2 px-screen-x pt-1 pb-0">
+          <Link
+            href="/community/clubs"
+            className="flex items-center gap-1 rounded-full px-3 py-1 text-caption font-semibold border border-border text-foreground-muted hover:border-gray-400 transition-colors"
+          >
+            <Shield size={12} />
+            Clubs
+          </Link>
           {(["Trending", "Newest"] as const).map((label) => {
             const value = label.toLowerCase() as "trending" | "newest";
             return (
@@ -234,6 +242,20 @@ export function CommunityFeedView({ initialPosts, initialHasMore, isAuthenticate
         <div className="lg:grid lg:grid-cols-[1fr_280px] lg:gap-6">
           {/* Posts */}
           <div>
+            {/* Vehicle History quick access — mobile only */}
+            <Link
+              href="/vehicle-history"
+              className="lg:hidden flex items-center gap-3 mb-4 bg-card rounded-card border border-border p-3 hover:shadow-md transition-shadow"
+            >
+              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                <History size={16} className="text-primary" aria-hidden="true" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-body font-semibold text-foreground">Vehicle History</p>
+                <p className="text-caption text-foreground-muted">Look up service records by reg number</p>
+              </div>
+            </Link>
+
             {/* Active tag dismiss chip */}
             {activeTag && (
               <div className="pb-3 flex items-center gap-2">
@@ -312,6 +334,31 @@ export function CommunityFeedView({ initialPosts, initialHasMore, isAuthenticate
 
           {/* Desktop sidebar: Trending tags */}
           <aside className="hidden lg:block space-y-4">
+            <Link
+              href="/community/clubs"
+              className="flex items-center gap-3 bg-card rounded-card border border-border p-4 shadow-card hover:shadow-md transition-shadow"
+            >
+              <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                <Shield size={18} className="text-primary" aria-hidden="true" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-body font-semibold text-foreground">Clubs</p>
+                <p className="text-caption text-foreground-muted">Your riding clubs &amp; communities</p>
+              </div>
+            </Link>
+            <Link
+              href="/vehicle-history"
+              className="flex items-center gap-3 bg-card rounded-card border border-border p-4 shadow-card hover:shadow-md transition-shadow"
+            >
+              <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                <History size={18} className="text-primary" aria-hidden="true" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-body font-semibold text-foreground">Vehicle History</p>
+                <p className="text-caption text-foreground-muted">Look up service records by reg number</p>
+              </div>
+            </Link>
+
             <div className="bg-card rounded-card border border-border p-4 shadow-card">
               <h3 className="text-heading font-semibold mb-3">Trending Tags</h3>
               <ul className="space-y-2">

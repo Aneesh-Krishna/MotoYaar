@@ -7,6 +7,7 @@ import { Map } from "lucide-react";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { DocumentsTab } from "@/components/documents/DocumentsTab";
 import { ExpensesTab } from "@/components/expenses/ExpensesTab";
+import { ServiceRemindersPanel } from "@/components/vehicles/ServiceRemindersPanel";
 import { formatINR, formatDate, getDocumentStatus } from "@/lib/utils";
 import type { Vehicle, Document, Expense } from "@/types";
 
@@ -19,6 +20,8 @@ interface Props {
   storagePreference: "parse_only" | "full_storage";
   documents: Document[];
   expenses: Expense[];
+  avgKmpl: number | null;
+  lastFillUp: { date: string; litresFilled: number } | null;
 }
 
 const TABS = [
@@ -26,6 +29,7 @@ const TABS = [
   { id: "documents", label: "Documents" },
   { id: "expenses", label: "Expenses" },
   { id: "trips", label: "Trips" },
+  { id: "reminders", label: "Reminders" },
 ];
 
 export function VehicleDetailTabs({
@@ -37,6 +41,8 @@ export function VehicleDetailTabs({
   storagePreference,
   documents,
   expenses,
+  avgKmpl,
+  lastFillUp,
 }: Props) {
   const [activeTab, setActiveTab] = useState(initialTab);
   const pathname = usePathname();
@@ -85,6 +91,8 @@ export function VehicleDetailTabs({
             totalSpend={totalSpend}
             lastService={lastService}
             nextExpiry={nextExpiry}
+            avgKmpl={avgKmpl}
+            lastFillUp={lastFillUp}
           />
         )}
         {activeTab === "documents" && (
@@ -105,6 +113,9 @@ export function VehicleDetailTabs({
             ctaHref={`/garage/${vehicle.id}/trips/new`}
           />
         )}
+        {activeTab === "reminders" && (
+          <ServiceRemindersPanel vehicleId={vehicle.id} vehicleType={vehicle.type} />
+        )}
       </div>
     </div>
   );
@@ -116,9 +127,11 @@ interface OverviewTabProps {
   totalSpend: number;
   lastService: string | null;
   nextExpiry: string | null;
+  avgKmpl: number | null;
+  lastFillUp: { date: string; litresFilled: number } | null;
 }
 
-function OverviewTab({ totalSpend, lastService, nextExpiry }: OverviewTabProps) {
+function OverviewTab({ totalSpend, lastService, nextExpiry, avgKmpl, lastFillUp }: OverviewTabProps) {
   const nextExpiryStatus = nextExpiry ? getDocumentStatus(nextExpiry) : null;
 
   return (
@@ -147,6 +160,30 @@ function OverviewTab({ totalSpend, lastService, nextExpiry }: OverviewTabProps) 
           </div>
         ) : (
           <p className="text-lg font-semibold text-gray-400">No documents added</p>
+        )}
+      </div>
+
+      {/* Fuel Efficiency */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+        <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Avg Fuel Efficiency</p>
+        <p className="text-lg font-semibold text-gray-900">
+          {avgKmpl != null ? `${avgKmpl.toFixed(1)} kmpl` : "No data yet"}
+        </p>
+        {avgKmpl != null && (
+          <p className="text-xs text-gray-400 mt-0.5">Based on last 5 fill-ups</p>
+        )}
+      </div>
+
+      {/* Last Fill-Up */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+        <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Last Fill-Up</p>
+        {lastFillUp ? (
+          <div>
+            <p className="text-lg font-semibold text-gray-900">{formatDate(lastFillUp.date)}</p>
+            <p className="text-xs text-gray-400 mt-0.5">{lastFillUp.litresFilled.toFixed(1)} L</p>
+          </div>
+        ) : (
+          <p className="text-lg font-semibold text-gray-400">No fill-up recorded</p>
         )}
       </div>
     </div>

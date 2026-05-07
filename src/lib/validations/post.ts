@@ -6,6 +6,7 @@ export const createPostSchema = z.object({
   imageKeys: z.array(z.string()).max(2).optional().default([]),
   link: z.string().url("Must be a valid URL").optional().or(z.literal("")),
   tags: z.array(z.string().max(50)).max(10).optional().default([]),
+  clubId: z.string().uuid().optional(),
 });
 
 export type CreatePostInput = z.infer<typeof createPostSchema>;

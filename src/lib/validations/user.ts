@@ -14,6 +14,7 @@ export const updateUserSchema = z.object({
   walkthroughSeen: z.boolean().optional(),
   documentStoragePreference: z.enum(["parse_only", "full_storage"]).optional(),
   currency: z.enum(["INR", "USD", "EUR", "GBP", "AED", "SGD"]).optional(),
+  historyOptOut: z.boolean().optional(),
 });
 
 export type UpdateUserInput = z.infer<typeof updateUserSchema>;

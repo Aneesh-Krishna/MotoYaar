@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus, MapPin } from "lucide-react";
+import { Plus, MapPin, Users } from "lucide-react";
 import { getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
 import { tripService } from "@/services/tripService";
@@ -31,13 +31,24 @@ export default async function TripsPage() {
           }
         />
       ) : (
-        <ul className="space-y-3" aria-label="Your trips">
-          {trips.map((trip) => (
-            <li key={trip.id}>
-              <TripCard trip={trip} />
-            </li>
-          ))}
-        </ul>
+        <>
+          <div className="flex justify-end mb-3">
+            <Link
+              href="/group-expenses/new"
+              className="inline-flex items-center gap-1.5 text-sm text-orange-600 font-medium hover:text-orange-700"
+            >
+              <Users size={15} />
+              New Group Session
+            </Link>
+          </div>
+          <ul className="space-y-3" aria-label="Your trips">
+            {trips.map((trip) => (
+              <li key={trip.id}>
+                <TripCard trip={trip} />
+              </li>
+            ))}
+          </ul>
+        </>
       )}
     </div>
   );
