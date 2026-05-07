@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { MapPin, Car, Clock, ChevronRight } from "lucide-react";
+import { MapPin, Car, Clock, ChevronRight, Users } from "lucide-react";
 import { formatINR } from "@/utils/currency";
 import type { Trip, Expense } from "@/types";
 
@@ -88,6 +88,14 @@ export default function TripOverviewTab({ trip, linkedExpense }: Props) {
           View linked expense entry
         </span>
       )}
+
+      <Link
+        href={`/group-expenses/new?tripId=${trip.id}`}
+        className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl border border-orange-300 text-orange-600 text-sm font-medium hover:bg-orange-50 transition-colors"
+      >
+        <Users size={16} />
+        Start Group Expenses
+      </Link>
     </div>
   );
 }

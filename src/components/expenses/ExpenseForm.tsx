@@ -21,7 +21,9 @@ import {
 } from "@/services/api/expenseApi";
 import { ApiError } from "@/lib/api-client";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
-import type { Expense, ExpenseReason } from "@/types";
+import { ServiceCenterPicker } from "@/components/expenses/ServiceCenterPicker";
+import { RatingPrompt } from "@/components/service-centers/RatingPrompt";
+import type { Expense, ExpenseReason, ServiceCenter } from "@/types";
 
 interface ExpenseFormProps {
   vehicleId?: string;
@@ -42,6 +44,8 @@ export function ExpenseForm({ vehicleId, vehicleName, expense, onSaved, onTripRe
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [selectedServiceCenter, setSelectedServiceCenter] = useState<ServiceCenter | null>(null);
+  const [ratingPromptServiceCenter, setRatingPromptServiceCenter] = useState<ServiceCenter | null>(null);
   const isEditMode = !!expense;
 
   // Receipt state
@@ -65,6 +69,8 @@ export function ExpenseForm({ vehicleId, vehicleName, expense, onSaved, onTripRe
           reason: expense.reason,
           whereText: expense.whereText ?? "",
           comment: expense.comment,
+          litresFilled: expense.litresFilled,
+          odometerKm: expense.odometerKm,
         }
       : {
           price: undefined,
@@ -72,6 +78,8 @@ export function ExpenseForm({ vehicleId, vehicleName, expense, onSaved, onTripRe
           reason: undefined,
           whereText: "",
           comment: undefined,
+          litresFilled: undefined,
+          odometerKm: undefined,
         },
   });
 
@@ -160,19 +168,24 @@ export function ExpenseForm({ vehicleId, vehicleName, expense, onSaved, onTripRe
   const onSubmit = async (data: CreateExpenseInput) => {
     setIsSubmitting(true);
     try {
+      const payload = { ...data, serviceCenterId: selectedServiceCenter?.id };
       if (isEditMode) {
         await updateExpense(expense.id, {
-          ...data,
+          ...payload,
           tempReceiptKey,
           removeReceipt: removeReceipt || undefined,
         });
       } else if (vehicleId) {
-        await createVehicleExpense(vehicleId, { ...data, tempReceiptKey });
+        await createVehicleExpense(vehicleId, { ...payload, tempReceiptKey });
       } else {
-        await createExpense({ ...data, tempReceiptKey });
+        await createExpense({ ...payload, tempReceiptKey });
       }
       toast.success("Expense saved");
-      onSaved();
+      if (data.reason === "Service" && selectedServiceCenter) {
+        setRatingPromptServiceCenter(selectedServiceCenter);
+      } else {
+        onSaved();
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to save expense");
     } finally {
@@ -309,15 +322,55 @@ export function ExpenseForm({ vehicleId, vehicleName, expense, onSaved, onTripRe
         )}
       </div>
 
-      {/* Where (optional) */}
+      {/* Fuel-specific fields */}
+      {selectedReason === "Fuel" && (
+        <div className="flex gap-3">
+          <div className="flex-1">
+            <label className="text-sm font-medium text-gray-700">Litres filled</label>
+            <input
+              type="number"
+              inputMode="decimal"
+              placeholder="e.g. 12.5"
+              step="0.1"
+              className="mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm w-full bg-white focus:outline-none focus:ring-2 focus:ring-orange-400 text-gray-700"
+              {...form.register("litresFilled", { valueAsNumber: true })}
+            />
+            {form.formState.errors.litresFilled && (
+              <p className="text-xs text-red-500 mt-1">{form.formState.errors.litresFilled.message}</p>
+            )}
+          </div>
+          <div className="flex-1">
+            <label className="text-sm font-medium text-gray-700">Odometer (km)</label>
+            <input
+              type="number"
+              inputMode="numeric"
+              placeholder="e.g. 15240"
+              className="mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm w-full bg-white focus:outline-none focus:ring-2 focus:ring-orange-400 text-gray-700"
+              {...form.register("odometerKm", { valueAsNumber: true })}
+            />
+            {form.formState.errors.odometerKm && (
+              <p className="text-xs text-red-500 mt-1">{form.formState.errors.odometerKm.message}</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Where (optional) — service center picker when reason=Service, else free-text */}
       <div>
         <label className="text-sm font-medium text-gray-700">Where</label>
-        <input
-          type="text"
-          placeholder="e.g. Raj Motors, Bangalore"
-          className="mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm w-full bg-white focus:outline-none focus:ring-2 focus:ring-orange-400 text-gray-700"
-          {...form.register("whereText")}
-        />
+        {selectedReason === "Service" ? (
+          <ServiceCenterPicker
+            value={selectedServiceCenter}
+            onChange={setSelectedServiceCenter}
+          />
+        ) : (
+          <input
+            type="text"
+            placeholder="e.g. Raj Motors, Bangalore"
+            className="mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm w-full bg-white focus:outline-none focus:ring-2 focus:ring-orange-400 text-gray-700"
+            {...form.register("whereText")}
+          />
+        )}
       </div>
 
       {/* Comment (optional) */}
@@ -431,6 +484,16 @@ export function ExpenseForm({ vehicleId, vehicleName, expense, onSaved, onTripRe
         isDestructive={true}
         isLoading={isDeleting}
       />
+
+      {ratingPromptServiceCenter && (
+        <RatingPrompt
+          serviceCenter={ratingPromptServiceCenter}
+          onDone={() => {
+            setRatingPromptServiceCenter(null);
+            onSaved();
+          }}
+        />
+      )}
     </form>
   );
 }

@@ -48,6 +48,7 @@ const defaultProps = {
   initialNotificationWindowDays: 30,
   initialEmailNotificationsEnabled: true,
   initialDocumentStoragePreference: "parse_only" as const,
+  initialHistoryOptOut: false,
 };
 
 describe("SettingsView", () => {
@@ -76,6 +77,7 @@ describe("SettingsView", () => {
         initialNotificationWindowDays={45}
         initialEmailNotificationsEnabled={false}
         initialDocumentStoragePreference="parse_only"
+        initialHistoryOptOut={false}
       />
     );
 
@@ -91,6 +93,7 @@ describe("SettingsView", () => {
         initialNotificationWindowDays={30}
         initialEmailNotificationsEnabled={true}
         initialDocumentStoragePreference="full_storage"
+        initialHistoryOptOut={false}
       />
     );
 
@@ -105,6 +108,7 @@ describe("SettingsView", () => {
         initialNotificationWindowDays={30}
         initialEmailNotificationsEnabled={true}
         initialDocumentStoragePreference="parse_only"
+        initialHistoryOptOut={false}
       />
     );
 

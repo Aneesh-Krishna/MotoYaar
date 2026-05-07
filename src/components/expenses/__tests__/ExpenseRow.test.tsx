@@ -74,4 +74,16 @@ describe("ExpenseRow", () => {
     expect(onTap).toHaveBeenCalledOnce();
     expect(onTap).toHaveBeenCalledWith("expense-abc");
   });
+
+  it("shows kmpl when expense has a calculated kmpl value", () => {
+    render(<ExpenseRow expense={makeExpense({ reason: "Fuel", kmpl: 28.5 })} onTap={onTap} />);
+
+    expect(screen.getByText("28.5 kmpl")).toBeInTheDocument();
+  });
+
+  it("does not show kmpl when expense has no kmpl value", () => {
+    render(<ExpenseRow expense={makeExpense({ reason: "Fuel", kmpl: undefined })} onTap={onTap} />);
+
+    expect(screen.queryByText(/kmpl/)).not.toBeInTheDocument();
+  });
 });

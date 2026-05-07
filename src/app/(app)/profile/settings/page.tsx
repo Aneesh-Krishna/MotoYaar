@@ -17,6 +17,7 @@ export default async function SettingsPage() {
       initialDocumentStoragePreference={
         (user.documentStoragePreference as "parse_only" | "full_storage") ?? "parse_only"
       }
+      initialHistoryOptOut={user.historyOptOut ?? false}
     />
   );
 }

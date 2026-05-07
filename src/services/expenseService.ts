@@ -1,12 +1,13 @@
 import { db } from "@/lib/db/client";
 import { expenses, vehicles } from "@/lib/db/schema";
-import { eq, desc, and, sql, lte, gte } from "drizzle-orm";
+import { eq, desc, and, sql, lte, gte, isNotNull, isNull, ne } from "drizzle-orm";
 import { vehicleService } from "@/services/vehicleService";
 import type { CreateExpenseInput, UpdateExpenseInput } from "@/lib/validations/expense";
 import { NotFoundError, ForbiddenError } from "@/lib/errors";
 import { logger } from "@/lib/logger";
 import { copyObject, deleteObject } from "@/lib/r2";
 import type { Expense, RecentActivity } from "@/types";
+import { serviceReminderService } from "@/services/serviceReminderService";
 
 function mapExpense(row: typeof expenses.$inferSelect): Expense {
   return {
@@ -19,8 +20,36 @@ function mapExpense(row: typeof expenses.$inferSelect): Expense {
     comment: (row.comment ?? undefined) as Expense["comment"],
     receiptUrl: row.receiptUrl ?? undefined,
     receiptKey: row.receiptKey ?? undefined,
+    litresFilled: row.litresFilled != null ? Number(row.litresFilled) : undefined,
+    odometerKm: row.odometerKm ?? undefined,
+    kmpl: row.kmpl != null ? Number(row.kmpl) : undefined,
+    serviceCenterId: row.serviceCenterId ?? undefined,
     createdAt: row.createdAt.toISOString(),
   };
+}
+
+async function calculateKmpl(
+  vehicleId: string,
+  currentOdometer: number,
+  litresFilled: number,
+  excludeId?: string
+): Promise<number | null> {
+  const conditions = [
+    eq(expenses.vehicleId, vehicleId),
+    eq(expenses.reason, "Fuel"),
+    isNotNull(expenses.odometerKm),
+    isNull(expenses.deletedAt),
+    ...(excludeId ? [ne(expenses.id, excludeId)] : []),
+  ];
+  const prev = await db.query.expenses.findFirst({
+    where: and(...conditions),
+    orderBy: [desc(expenses.date), desc(expenses.createdAt)],
+  });
+
+  if (!prev?.odometerKm) return null;
+  const distanceKm = currentOdometer - prev.odometerKm;
+  if (distanceKm <= 0) return null;
+  return parseFloat((distanceKm / litresFilled).toFixed(2));
 }
 
 export const expenseService = {
@@ -29,6 +58,16 @@ export const expenseService = {
     vehicleId: string | undefined,
     data: CreateExpenseInput
   ): Promise<Expense> {
+    let kmpl: number | null = null;
+    if (
+      vehicleId &&
+      data.reason === "Fuel" &&
+      data.odometerKm != null &&
+      data.litresFilled != null
+    ) {
+      kmpl = await calculateKmpl(vehicleId, data.odometerKm, data.litresFilled);
+    }
+
     const [expense] = await db
       .insert(expenses)
       .values({
@@ -42,8 +81,19 @@ export const expenseService = {
         comment: data.comment ?? null,
         receiptUrl: null,
         receiptKey: null,
+        litresFilled: data.litresFilled != null ? String(data.litresFilled) : null,
+        odometerKm: data.odometerKm ?? null,
+        kmpl: kmpl != null ? String(kmpl) : null,
+        serviceCenterId: data.serviceCenterId ?? null,
       })
       .returning();
+
+    // Trigger km-based service reminder check when odometer is logged on a fuel expense
+    if (vehicleId && data.reason === "Fuel" && data.odometerKm != null) {
+      serviceReminderService
+        .checkKmRemindersForVehicle(vehicleId, data.odometerKm)
+        .catch((err) => logger.error({ err }, "km reminder check failed"));
+    }
 
     if (data.tempReceiptKey) {
       if (!data.tempReceiptKey.startsWith(`${userId}/receipts/temp/`)) {
@@ -113,6 +163,22 @@ export const expenseService = {
       newReceiptUrl = null;
     }
 
+    const updatedReason = data.reason ?? expense.reason;
+    const updatedOdometer = data.odometerKm !== undefined ? data.odometerKm : expense.odometerKm;
+    const updatedLitres = data.litresFilled !== undefined ? data.litresFilled : (expense.litresFilled != null ? Number(expense.litresFilled) : null);
+
+    let newKmpl: string | null | undefined = undefined;
+    if (updatedReason !== "Fuel") {
+      newKmpl = null;
+    } else if (
+      expense.vehicleId &&
+      updatedOdometer != null &&
+      updatedLitres != null
+    ) {
+      const calculated = await calculateKmpl(expense.vehicleId, updatedOdometer, updatedLitres, expenseId);
+      newKmpl = calculated != null ? String(calculated) : null;
+    }
+
     const [updated] = await db
       .update(expenses)
       .set({
@@ -121,8 +187,12 @@ export const expenseService = {
         reason: data.reason,
         whereText: data.whereText ?? null,
         comment: data.comment ?? null,
+        litresFilled: data.litresFilled !== undefined ? (data.litresFilled != null ? String(data.litresFilled) : null) : undefined,
+        odometerKm: data.odometerKm !== undefined ? (data.odometerKm ?? null) : undefined,
+        ...(newKmpl !== undefined && { kmpl: newKmpl }),
         ...(newReceiptKey !== undefined && { receiptKey: newReceiptKey }),
         ...(newReceiptUrl !== undefined && { receiptUrl: newReceiptUrl }),
+        ...(data.serviceCenterId !== undefined && { serviceCenterId: data.serviceCenterId ?? null }),
       })
       .where(eq(expenses.id, expenseId))
       .returning();
@@ -142,6 +212,15 @@ export const expenseService = {
       throw new ForbiddenError("Trip-linked expenses can only be deleted by deleting the trip");
     }
 
+    if (expense.reason === "Service") {
+      // Soft-delete service expenses to preserve vehicle history tombstones
+      await db
+        .update(expenses)
+        .set({ deletedAt: new Date(), deletedByOwner: true })
+        .where(eq(expenses.id, expenseId));
+      return;
+    }
+
     if (expense.receiptKey) {
       await deleteObject(expense.receiptKey).catch((e) =>
         logger.error({ error: e, expenseId }, "Failed to delete receipt from R2")
@@ -155,7 +234,7 @@ export const expenseService = {
     await vehicleService.getWithAccessCheck(vehicleId, userId);
 
     const rows = await db.query.expenses.findMany({
-      where: eq(expenses.vehicleId, vehicleId),
+      where: and(eq(expenses.vehicleId, vehicleId), isNull(expenses.deletedAt)),
       orderBy: [desc(expenses.date)],
     });
 
@@ -170,7 +249,7 @@ export const expenseService = {
       })
       .from(expenses)
       .leftJoin(vehicles, eq(expenses.vehicleId, vehicles.id))
-      .where(eq(expenses.userId, userId))
+      .where(and(eq(expenses.userId, userId), isNull(expenses.deletedAt)))
       .orderBy(desc(expenses.date), desc(expenses.createdAt))
       .limit(limit);
 
@@ -185,7 +264,7 @@ export const expenseService = {
     const [row] = await db
       .select({ total: sql<string>`COALESCE(SUM(${expenses.price}), '0')` })
       .from(expenses)
-      .where(eq(expenses.vehicleId, vehicleId));
+      .where(and(eq(expenses.vehicleId, vehicleId), isNull(expenses.deletedAt)));
     return parseFloat(row?.total ?? "0");
   },
 
@@ -193,7 +272,7 @@ export const expenseService = {
     const [row] = await db
       .select({ date: expenses.date })
       .from(expenses)
-      .where(and(eq(expenses.vehicleId, vehicleId), eq(expenses.reason, "Service")))
+      .where(and(eq(expenses.vehicleId, vehicleId), eq(expenses.reason, "Service"), isNull(expenses.deletedAt)))
       .orderBy(desc(expenses.date))
       .limit(1);
     return row?.date ?? null;
@@ -201,7 +280,7 @@ export const expenseService = {
 
   async getByTripId(tripId: string, userId: string): Promise<Expense | null> {
     const row = await db.query.expenses.findFirst({
-      where: and(eq(expenses.tripId, tripId), eq(expenses.userId, userId)),
+      where: and(eq(expenses.tripId, tripId), eq(expenses.userId, userId), isNull(expenses.deletedAt)),
     });
     return row ? mapExpense(row) : null;
   },
@@ -212,7 +291,7 @@ export const expenseService = {
     from?: string,
     to?: string
   ): Promise<Expense[]> {
-    const conditions = [eq(expenses.vehicleId, vehicleId), eq(expenses.userId, userId)];
+    const conditions = [eq(expenses.vehicleId, vehicleId), eq(expenses.userId, userId), isNull(expenses.deletedAt)];
     if (from) conditions.push(gte(expenses.date, from));
     if (to) conditions.push(lte(expenses.date, to));
 
@@ -227,7 +306,30 @@ export const expenseService = {
     const rows = await db
       .select()
       .from(expenses)
-      .where(and(eq(expenses.userId, userId), gte(expenses.date, from), lte(expenses.date, to)));
+      .where(and(eq(expenses.userId, userId), gte(expenses.date, from), lte(expenses.date, to), isNull(expenses.deletedAt)));
     return rows.map(mapExpense);
+  },
+
+  async avgKmplLast5(vehicleId: string): Promise<number | null> {
+    const rows = await db
+      .select({ kmpl: expenses.kmpl })
+      .from(expenses)
+      .where(and(eq(expenses.vehicleId, vehicleId), eq(expenses.reason, "Fuel"), isNotNull(expenses.kmpl), isNull(expenses.deletedAt)))
+      .orderBy(desc(expenses.date))
+      .limit(5);
+
+    if (!rows.length) return null;
+    const sum = rows.reduce((s, r) => s + Number(r.kmpl!), 0);
+    return parseFloat((sum / rows.length).toFixed(2));
+  },
+
+  async lastFillUp(vehicleId: string): Promise<{ date: string; litresFilled: number } | null> {
+    const row = await db.query.expenses.findFirst({
+      where: and(eq(expenses.vehicleId, vehicleId), eq(expenses.reason, "Fuel"), isNotNull(expenses.litresFilled), isNull(expenses.deletedAt)),
+      orderBy: desc(expenses.date),
+    });
+
+    if (!row?.litresFilled) return null;
+    return { date: row.date, litresFilled: Number(row.litresFilled) };
   },
 };

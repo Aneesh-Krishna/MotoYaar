@@ -6,17 +6,22 @@ const baseExpenseFields = {
   reason: z.enum(["Service", "Fuel", "Trip", "Others"]),
   whereText: z.string().optional(),
   comment: z.enum(["Overpriced", "Average", "Underpriced"]).optional(),
+  serviceCenterId: z.string().uuid().optional(),
 };
 
 export const createExpenseSchema = z.object({
   ...baseExpenseFields,
   tempReceiptKey: z.string().optional(),
+  litresFilled: z.number().positive().optional(),
+  odometerKm: z.number().int().positive().optional(),
 });
 
 export const updateExpenseSchema = z.object({
   ...baseExpenseFields,
   tempReceiptKey: z.string().optional(),
   removeReceipt: z.boolean().optional(),
+  litresFilled: z.number().positive().optional(),
+  odometerKm: z.number().int().positive().optional(),
 }).partial();
 
 export type CreateExpenseInput = z.infer<typeof createExpenseSchema>;

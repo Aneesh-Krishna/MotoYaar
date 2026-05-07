@@ -77,7 +77,32 @@ export interface Expense {
   comment?: "Overpriced" | "Average" | "Underpriced";
   receiptUrl?: string;
   receiptKey?: string;
+  litresFilled?: number;
+  odometerKm?: number;
+  kmpl?: number;
+  serviceCenterId?: string;
   createdAt: string;
+}
+
+export interface ServiceCenter {
+  id: string;
+  name: string;
+  city: string;
+  pincode?: string;
+  createdBy?: string;
+  avgRating?: number;
+  reviewCount: number;
+  createdAt: string;
+}
+
+export interface ServiceCenterReview {
+  id: string;
+  serviceCenterId: string;
+  userId: string;
+  rating: number;
+  reviewText?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface TripBreakdownItem {
@@ -154,12 +179,83 @@ export interface Notification {
     | "document_expired"
     | "ai_report_ready"
     | "vehicle_access_revoked"
+    | "service_reminder"
     | "warned"
-    | "suspended";
+    | "suspended"
+    | "group_expense_invite"
+    | "club_join_request";
   title: string;
   body: string;
   read: boolean;
   createdAt: string;
+}
+
+// ─── Group Expenses ───────────────────────────────────────────────────────────
+
+export type GroupExpenseSessionStatus = "active" | "archived";
+
+export interface GroupExpenseSession {
+  id: string;
+  title: string | null;
+  tripId: string | null;
+  createdBy: string;
+  status: GroupExpenseSessionStatus;
+  currency: string;
+  inviteCode: string;
+  createdAt: string;
+  members: GroupExpenseSessionMember[];
+}
+
+export interface GroupExpenseSessionMember {
+  userId: string;
+  name: string;
+  username: string | null;
+  profileImageUrl: string | null;
+  joinedAt: string;
+}
+
+export type GroupExpenseItemCategory = "Food" | "Fuel" | "Stay" | "Toll" | "Misc";
+
+export interface GroupExpenseItem {
+  id: string;
+  sessionId: string;
+  loggedBy: string;
+  paidBy: string;
+  paidByName: string;
+  amount: number;
+  description: string;
+  category: GroupExpenseItemCategory;
+  includedUserIds: string[];
+  perPerson: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GroupExpenseBalance {
+  from: string;
+  fromName: string;
+  to: string;
+  toName: string;
+  amount: number;
+}
+
+export interface GroupExpenseSettlement {
+  id: string;
+  sessionId: string;
+  from: string;
+  fromName: string;
+  to: string;
+  toName: string;
+  amount: number;
+  settledAt: string;
+  settledBy: string;
+}
+
+export interface GroupExpenseBalancesResponse {
+  activeBalances: GroupExpenseBalance[];
+  settlements: GroupExpenseSettlement[];
+  totalSessionSpend: number;
+  perMemberShare: { userId: string; name: string; share: number }[];
 }
 
 // ─── UI State Types ────────────────────────────────────────────────────────────
@@ -260,7 +356,51 @@ export interface AiReport {
   completedAt?: string;
 }
 
+// ─── Service Reminders ────────────────────────────────────────────────────────
+
+export interface ServiceReminder {
+  id: string;
+  vehicleId: string;
+  userId: string;
+  serviceType: string;
+  kmInterval?: number;
+  dayInterval?: number;
+  lastServicedKm?: number;
+  lastServicedAt?: string;
+  notifiedAt?: string;
+  createdAt: string;
+}
+
 // ─── Community ────────────────────────────────────────────────────────────────
 
 export type FeedPost = Post;
+
+// ─── Clubs ────────────────────────────────────────────────────────────────────
+
+export type ClubJoinPolicy = "approval" | "open";
+export type ClubMemberRole = "admin" | "member";
+export type ClubMemberStatus = "active" | "pending" | "removed";
+
+export interface Club {
+  id: string;
+  name: string;
+  city: string;
+  description?: string;
+  logoUrl?: string;
+  inviteCode: string;
+  joinPolicy: ClubJoinPolicy;
+  createdBy: string;
+  createdAt: string;
+  memberCount?: number;
+}
+
+export interface ClubMember {
+  id: string;
+  clubId: string;
+  userId: string;
+  role: ClubMemberRole;
+  status: ClubMemberStatus;
+  joinedAt: string;
+  user?: Pick<User, "id" | "name" | "username" | "profileImageUrl">;
+}
 
