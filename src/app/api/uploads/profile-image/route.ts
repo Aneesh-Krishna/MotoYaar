@@ -6,6 +6,7 @@ import path from "path";
 
 const ALLOWED_CONTENT_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 const MAX_FILENAME_LENGTH = 100;
+const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
 
 export async function POST(req: NextRequest) {
   try {
@@ -14,11 +15,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: { code: "UNAUTHORIZED" } }, { status: 401 });
     }
 
-    const { filename, contentType } = await req.json();
+    const { filename, contentType, fileSize } = await req.json();
 
     if (!contentType || !ALLOWED_CONTENT_TYPES.includes(contentType)) {
       return NextResponse.json(
         { error: { code: "VALIDATION_ERROR", message: "Invalid file type. Only JPEG, PNG, WebP, and GIF are allowed." } },
+        { status: 422 }
+      );
+    }
+
+    if (typeof fileSize !== "number" || fileSize > MAX_FILE_SIZE_BYTES) {
+      return NextResponse.json(
+        { error: { code: "VALIDATION_ERROR", message: "File too large. Maximum allowed size is 5 MB." } },
         { status: 422 }
       );
     }
