@@ -17,6 +17,7 @@ import { vehicles, trips, posts } from "@/lib/db/schema";
 import { eq, sql } from "drizzle-orm";
 import { SignOutButton } from "@/components/ui/SignOutButton";
 import { cn } from "@/lib/utils";
+import { NotFoundError } from "@/lib/errors";
 
 function ProfileActionCard({
   href,
@@ -54,14 +55,23 @@ export default async function ProfilePage() {
   const session = await getSession();
   if (!session) redirect("/login");
 
-  const [user, counts] = await Promise.all([
-    userService.getById(session.user.id),
-    Promise.all([
-      db.select({ count: sql<number>`COUNT(*)::int` }).from(vehicles).where(eq(vehicles.userId, session.user.id)),
-      db.select({ count: sql<number>`COUNT(*)::int` }).from(trips).where(eq(trips.userId, session.user.id)),
-      db.select({ count: sql<number>`COUNT(*)::int` }).from(posts).where(eq(posts.userId, session.user.id)),
-    ]),
-  ]);
+  let user: Awaited<ReturnType<typeof userService.getById>>;
+  let counts: { count: number }[][];
+  try {
+    [user, counts] = await Promise.all([
+      userService.getById(session.user.id),
+      Promise.all([
+        db.select({ count: sql<number>`COUNT(*)::int` }).from(vehicles).where(eq(vehicles.userId, session.user.id)),
+        db.select({ count: sql<number>`COUNT(*)::int` }).from(trips).where(eq(trips.userId, session.user.id)),
+        db.select({ count: sql<number>`COUNT(*)::int` }).from(posts).where(eq(posts.userId, session.user.id)),
+      ]),
+    ]);
+  } catch (err) {
+    if (err instanceof NotFoundError) {
+      redirect("/api/auth/force-signout");
+    }
+    throw err;
+  }
 
   const [vehicleCount, tripCount, postCount] = counts.map((r) => r[0]?.count ?? 0);
 
