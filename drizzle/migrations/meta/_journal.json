@@ -113,6 +113,69 @@
       "when": 1746259200000,
       "tag": "0015_planned_stops",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1746345600000,
+      "tag": "0016_fuel_efficiency",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1746432000000,
+      "tag": "0017_service_reminders",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1746518400000,
+      "tag": "0018_service_centers",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1746604800000,
+      "tag": "0019_vehicle_history",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1746691200000,
+      "tag": "0020_group_expense_sessions",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1746777600000,
+      "tag": "0021_group_expense_items",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1746864000000,
+      "tag": "0022_group_expense_settlements",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1746950400000,
+      "tag": "0023_clubs",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1747036800000,
+      "tag": "0024_posts_club_id",
+      "breakpoints": true
     }
   ]
 }
