@@ -71,18 +71,26 @@ export function EditVehicleForm({ vehicle }: { vehicle: Vehicle }) {
       let imageKey: string | undefined;
 
       if (pendingFile) {
-        const formData = new FormData();
-        formData.append("file", pendingFile);
-        const res = await fetch("/api/uploads/vehicle-image", { method: "POST", body: formData });
-        if (!res.ok) {
-          const errBody = await res.json().catch(() => ({}));
-          console.error("[vehicle-image] upload failed", res.status, errBody);
+        const presignRes = await fetch(
+          `/api/uploads/vehicle-image?contentType=${encodeURIComponent(pendingFile.type)}`
+        );
+        if (!presignRes.ok) {
           toast.error("Image upload failed. Please try again.");
           return;
         }
-        const uploaded = await res.json();
-        imageUrl = uploaded.publicUrl;
-        imageKey = uploaded.key;
+        const { uploadUrl, key, publicUrl: uploadedUrl } = await presignRes.json();
+        const r2Res = await fetch(uploadUrl, {
+          method: "PUT",
+          body: pendingFile,
+          headers: { "Content-Type": pendingFile.type },
+        });
+        if (!r2Res.ok) {
+          console.error("[vehicle-image] direct R2 upload failed", r2Res.status);
+          toast.error("Image upload failed. Please try again.");
+          return;
+        }
+        imageUrl = uploadedUrl;
+        imageKey = key;
       }
 
       await updateVehicle(vehicle.id, { ...data, imageUrl, imageKey });
