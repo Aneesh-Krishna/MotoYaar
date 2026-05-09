@@ -129,10 +129,12 @@ export function EditProfileForm({ user }: EditProfileFormProps) {
     if (!file) return;
     if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
       toast.error("Only JPEG, PNG, and WebP images are allowed.");
+      e.target.value = "";
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
       toast.error("Image must be under 5 MB.");
+      e.target.value = "";
       return;
     }
     if (blobUrlRef.current) URL.revokeObjectURL(blobUrlRef.current);
@@ -160,7 +162,7 @@ export function EditProfileForm({ user }: EditProfileFormProps) {
     const res = await fetch("/api/uploads/profile-image", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ filename: file.name, contentType: file.type }),
+      body: JSON.stringify({ filename: file.name, contentType: file.type, fileSize: file.size }),
     });
     if (!res.ok) throw new Error("Failed to get upload URL");
     const { uploadUrl, key } = await res.json();

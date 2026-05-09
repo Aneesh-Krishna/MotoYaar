@@ -28,6 +28,9 @@ type OnboardingFormData = z.infer<typeof onboardingSchema>;
 
 type UsernameStatus = "idle" | "checking" | "available" | "taken" | "invalid";
 
+const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5 MB
+
 export default function OnboardingPage() {
   const router = useRouter();
   const { data: session } = useSession();
@@ -96,6 +99,19 @@ export default function OnboardingPage() {
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+      setSubmitError("Invalid file type. Only JPEG, PNG, WebP, and GIF are allowed.");
+      e.target.value = "";
+      return;
+    }
+    if (file.size > MAX_IMAGE_SIZE) {
+      setSubmitError("Image is too large. Maximum allowed size is 5 MB.");
+      e.target.value = "";
+      return;
+    }
+
+    setSubmitError(null);
     setProfileImageFile(file);
     const reader = new FileReader();
     reader.onload = (ev) => setProfileImagePreview(ev.target?.result as string);
@@ -106,14 +122,21 @@ export default function OnboardingPage() {
     const res = await fetch("/api/uploads/profile-image", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ filename: file.name, contentType: file.type }),
+      body: JSON.stringify({ filename: file.name, contentType: file.type, fileSize: file.size }),
     });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err?.error?.message ?? "Failed to upload profile image.");
+    }
     const { uploadUrl, key } = await res.json();
-    await fetch(uploadUrl, {
+    const putRes = await fetch(uploadUrl, {
       method: "PUT",
       body: file,
       headers: { "Content-Type": file.type },
     });
+    if (!putRes.ok) {
+      throw new Error("Failed to upload profile image to storage.");
+    }
     return `${process.env.NEXT_PUBLIC_R2_PUBLIC_URL}/${key}`;
   };
 
@@ -126,8 +149,8 @@ export default function OnboardingPage() {
       if (profileImageFile) {
         try {
           profileImageUrl = await uploadProfileImage(profileImageFile);
-        } catch {
-          setSubmitError("Failed to upload profile image. Please try again.");
+        } catch (err) {
+          setSubmitError(err instanceof Error ? err.message : "Failed to upload profile image. Please try again.");
           return;
         }
       }
