@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -459,11 +459,28 @@ function formatDate(iso: string): string {
 
 // ─── Main Wizard ──────────────────────────────────────────────────────────────
 
+type UploadResult = { publicUrl: string; key: string };
+
+async function uploadVehicleImage(file: File): Promise<UploadResult> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const res = await fetch("/api/uploads/vehicle-image", { method: "POST", body: formData });
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => ({}));
+    console.error("[vehicle-image] upload failed", res.status, errBody);
+    throw new Error("Image upload failed");
+  }
+  return res.json();
+}
+
 export function AddVehicleWizard() {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [wizardData, setWizardData] = useState<WizardData>(INITIAL_DATA);
   const [conflictError, setConflictError] = useState<string | null>(null);
+  // Holds the in-flight upload promise started as soon as the user picks a photo.
+  // By the time they reach the Review step and click Save, the upload is likely done.
+  const uploadPromiseRef = useRef<Promise<UploadResult> | null>(null);
 
   function goToNextStep() {
     setStep((s) => s + 1);
@@ -498,6 +515,8 @@ export function AddVehicleWizard() {
 
   function handleImageSelected(file: File, previewUrl: string) {
     setWizardData((prev) => ({ ...prev, pendingImageFile: file, imagePreviewUrl: previewUrl }));
+    // Start uploading immediately in the background while the user continues through the wizard
+    uploadPromiseRef.current = uploadVehicleImage(file);
   }
 
   async function handleSave() {
@@ -507,27 +526,20 @@ export function AddVehicleWizard() {
       let imageKey: string | undefined;
 
       if (wizardData.pendingImageFile) {
-        const file = wizardData.pendingImageFile;
-        const presignRes = await fetch(
-          `/api/uploads/vehicle-image?contentType=${encodeURIComponent(file.type)}`
-        );
-        if (!presignRes.ok) {
+        // If the background upload hasn't finished yet, await it now; otherwise it resolves instantly
+        if (!uploadPromiseRef.current) {
+          uploadPromiseRef.current = uploadVehicleImage(wizardData.pendingImageFile);
+        }
+        try {
+          const result = await uploadPromiseRef.current;
+          imageUrl = result.publicUrl;
+          imageKey = result.key;
+        } catch {
           toast.error("Image upload failed. Please try again.");
+          // Reset so the user can retry
+          uploadPromiseRef.current = uploadVehicleImage(wizardData.pendingImageFile);
           return;
         }
-        const { uploadUrl, key, publicUrl: uploadedUrl } = await presignRes.json();
-        const r2Res = await fetch(uploadUrl, {
-          method: "PUT",
-          body: file,
-          headers: { "Content-Type": file.type },
-        });
-        if (!r2Res.ok) {
-          console.error("[vehicle-image] direct R2 upload failed", r2Res.status);
-          toast.error("Image upload failed. Please try again.");
-          return;
-        }
-        imageUrl = uploadedUrl;
-        imageKey = key;
       }
 
       const payload = {
