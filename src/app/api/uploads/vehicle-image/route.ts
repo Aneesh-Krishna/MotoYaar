@@ -1,50 +1,11 @@
 import { getSession } from "@/lib/session";
 import { NextRequest, NextResponse } from "next/server";
-import { putObject, deleteObject, generateUploadUrl } from "@/lib/r2";
+import { putObject, deleteObject } from "@/lib/r2";
 import { handleApiError } from "@/lib/errors";
 import path from "path";
 
 const ALLOWED_CONTENT_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
-
-/**
- * GET /api/uploads/vehicle-image?contentType=image/jpeg
- * Returns a presigned R2 PUT URL so the client can upload directly to R2,
- * bypassing the Next.js server and eliminating the double-hop for large files.
- */
-export async function GET(req: NextRequest) {
-  try {
-    const session = await getSession();
-    if (!session) {
-      return NextResponse.json({ error: { code: "UNAUTHORIZED" } }, { status: 401 });
-    }
-
-    const r2PublicUrl = process.env.R2_PUBLIC_URL;
-    if (!r2PublicUrl) {
-      return NextResponse.json(
-        { error: { code: "CONFIGURATION_ERROR", message: "Storage is not configured" } },
-        { status: 500 }
-      );
-    }
-
-    const contentType = req.nextUrl.searchParams.get("contentType") ?? "";
-    if (!ALLOWED_CONTENT_TYPES.includes(contentType)) {
-      return NextResponse.json(
-        { error: { code: "VALIDATION_ERROR", message: "Invalid file type. Only JPEG, PNG, and WebP are allowed." } },
-        { status: 422 }
-      );
-    }
-
-    const ext = contentType === "image/png" ? ".png" : contentType === "image/webp" ? ".webp" : ".jpg";
-    const key = `${session.user.id}/vehicles/images/${crypto.randomUUID()}${ext}`;
-    const uploadUrl = await generateUploadUrl(key, contentType, 60);
-    const publicUrl = `${r2PublicUrl}/${key}`;
-
-    return NextResponse.json({ uploadUrl, key, publicUrl });
-  } catch (error) {
-    return handleApiError(error);
-  }
-}
 
 export async function POST(req: NextRequest) {
   try {
