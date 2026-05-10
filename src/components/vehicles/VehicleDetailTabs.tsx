@@ -2,8 +2,6 @@
 
 import { useState } from "react";
 import { usePathname } from "next/navigation";
-import Link from "next/link";
-import { Map } from "lucide-react";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { DocumentsTab } from "@/components/documents/DocumentsTab";
 import { ExpensesTab } from "@/components/expenses/ExpensesTab";
@@ -28,7 +26,6 @@ const TABS = [
   { id: "overview", label: "Overview" },
   { id: "documents", label: "Documents" },
   { id: "expenses", label: "Expenses" },
-  { id: "trips", label: "Trips" },
   { id: "reminders", label: "Reminders" },
 ];
 
@@ -105,14 +102,6 @@ export function VehicleDetailTabs({
         {activeTab === "expenses" && (
           <ExpensesTab vehicleId={vehicle.id} vehicleName={vehicle.name} expenses={expenses} />
         )}
-        {activeTab === "trips" && (
-          <PlaceholderTab
-            Icon={Map}
-            message="No trips yet. Log your first journey."
-            ctaLabel="Add Trip"
-            ctaHref={`/garage/${vehicle.id}/trips/new`}
-          />
-        )}
         {activeTab === "reminders" && (
           <ServiceRemindersPanel vehicleId={vehicle.id} vehicleType={vehicle.type} />
         )}
@@ -186,39 +175,6 @@ function OverviewTab({ totalSpend, lastService, nextExpiry, avgKmpl, lastFillUp 
           <p className="text-lg font-semibold text-gray-400">No fill-up recorded</p>
         )}
       </div>
-    </div>
-  );
-}
-
-// ─── Placeholder Tab ──────────────────────────────────────────────────────────
-
-interface PlaceholderTabProps {
-  Icon: React.ElementType;
-  message: string;
-  ctaLabel: string;
-  ctaHref?: string;
-  onCtaClick?: () => void;
-}
-
-function PlaceholderTab({ Icon, message, ctaLabel, ctaHref, onCtaClick }: PlaceholderTabProps) {
-  return (
-    <div className="flex flex-col items-center justify-center py-16 gap-4 text-center px-8">
-      <Icon size={48} className="text-gray-300" aria-hidden="true" />
-      <p className="text-gray-500 text-sm">{message}</p>
-      {onCtaClick ? (
-        <button
-          onClick={onCtaClick}
-          className="bg-orange-500 text-white px-5 py-2 rounded-lg text-sm font-semibold"
-        >
-          {ctaLabel}
-        </button>
-      ) : (
-        <Link href={ctaHref!}>
-          <button className="bg-orange-500 text-white px-5 py-2 rounded-lg text-sm font-semibold">
-            {ctaLabel}
-          </button>
-        </Link>
-      )}
     </div>
   );
 }

@@ -29,19 +29,19 @@ export function BottomSheet({ open, onClose, title, children, className }: Botto
       <SheetContent
         side="bottom"
         className={cn(
-          "max-h-[90vh] overflow-y-auto rounded-t-2xl p-0",
+          "max-h-[90vh] overflow-y-auto rounded-t-2xl p-0 bg-white",
           className
         )}
         aria-modal="true"
       >
         {/* Drag handle */}
-        <div className="flex justify-center pt-3 pb-1">
-          <div className="h-1 w-10 rounded-full bg-gray-300" aria-hidden="true" />
+        <div className="flex justify-center pt-3 pb-2">
+          <div className="h-1 w-8 rounded-full bg-gray-200" aria-hidden="true" />
         </div>
 
         {title && (
-          <SheetHeader className="px-4 pb-2">
-            <SheetTitle className="text-base font-semibold text-center">{title}</SheetTitle>
+          <SheetHeader className="px-4 pb-3 border-b border-gray-100">
+            <SheetTitle className="text-base font-semibold text-gray-900 text-center">{title}</SheetTitle>
           </SheetHeader>
         )}
 

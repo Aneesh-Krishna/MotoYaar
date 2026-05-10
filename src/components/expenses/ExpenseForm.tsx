@@ -222,73 +222,80 @@ export function ExpenseForm({ vehicleId, vehicleName, expense, onSaved, onTripRe
   const isTripReason = isEditMode && expense?.reason === "Trip";
   const visibleReasons = isEditMode ? EDIT_REASONS : REASONS;
 
+  const inputClass = "mt-1.5 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm w-full bg-white focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-transparent text-gray-800 placeholder:text-gray-400";
+  const labelClass = "text-xs font-semibold text-gray-500 uppercase tracking-wide";
+
   return (
-    <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-4 p-4">
+    <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-5 px-4 pb-6 pt-2">
       {/* Vehicle context — non-editable when pre-filled */}
       {vehicleId && (
         <div>
-          <label className="text-sm font-medium text-gray-700">Vehicle</label>
-          <p className="mt-1 text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+          <label className={labelClass}>Vehicle</label>
+          <p className="mt-1.5 text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5">
             {vehicleName ?? "This vehicle"}
           </p>
         </div>
       )}
 
-      {/* Price */}
-      <div>
-        <label className="text-sm font-medium text-gray-700">
-          Price <span className="text-red-500">*</span>
-        </label>
-        <div className="relative mt-1">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-medium select-none">
-            {currencySymbol}
-          </span>
-          <input
-            type="number"
-            inputMode="decimal"
-            placeholder="0.00"
-            className="border border-gray-300 rounded-lg pl-8 pr-3 py-2 text-sm w-full bg-white focus:outline-none focus:ring-2 focus:ring-orange-400 text-gray-700"
-            {...form.register("price", { valueAsNumber: true })}
-          />
+      {/* Price + Date side by side */}
+      <div className="flex gap-3">
+        {/* Price */}
+        <div className="flex-1">
+          <label className={labelClass}>
+            Amount <span className="text-red-400 normal-case tracking-normal">*</span>
+          </label>
+          <div className="relative mt-1.5">
+            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-sm font-medium select-none">
+              {currencySymbol}
+            </span>
+            <input
+              type="number"
+              inputMode="decimal"
+              placeholder="0.00"
+              className="border border-gray-200 rounded-xl pl-8 pr-3 py-2.5 text-sm w-full bg-white focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-transparent text-gray-800 placeholder:text-gray-400"
+              {...form.register("price", { valueAsNumber: true })}
+            />
+          </div>
+          {form.formState.errors.price && (
+            <p className="text-xs text-red-500 mt-1">{form.formState.errors.price.message}</p>
+          )}
         </div>
-        {form.formState.errors.price && (
-          <p className="text-xs text-red-500 mt-1">{form.formState.errors.price.message}</p>
-        )}
+
+        {/* Date */}
+        <div className="flex-1">
+          <label className={labelClass}>
+            Date <span className="text-red-400 normal-case tracking-normal">*</span>
+          </label>
+          <input
+            type="date"
+            max={format(new Date(), "yyyy-MM-dd")}
+            className={inputClass}
+            {...form.register("date")}
+          />
+          {form.formState.errors.date && (
+            <p className="text-xs text-red-500 mt-1">{form.formState.errors.date.message}</p>
+          )}
+        </div>
       </div>
 
-      {/* Date */}
-      <div>
-        <label className="text-sm font-medium text-gray-700">
-          Date <span className="text-red-500">*</span>
-        </label>
-        <input
-          type="date"
-          max={format(new Date(), "yyyy-MM-dd")}
-          className="mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm w-full bg-white focus:outline-none focus:ring-2 focus:ring-orange-400 text-gray-700"
-          {...form.register("date")}
-        />
-        {isPastDateWarning && (
-          <p className="text-xs text-amber-600 flex items-center gap-1 mt-1">
-            <AlertTriangle size={12} />
-            This date seems far in the past — double-check?
-          </p>
-        )}
-        {form.formState.errors.date && (
-          <p className="text-xs text-red-500 mt-1">{form.formState.errors.date.message}</p>
-        )}
-      </div>
+      {isPastDateWarning && (
+        <p className="text-xs text-amber-600 flex items-center gap-1 -mt-3">
+          <AlertTriangle size={12} />
+          This date seems far in the past — double-check?
+        </p>
+      )}
 
       {/* Reason chip selector */}
       <div>
-        <label className="text-sm font-medium text-gray-700">
-          Reason <span className="text-red-500">*</span>
+        <label className={labelClass}>
+          Reason <span className="text-red-400 normal-case tracking-normal">*</span>
         </label>
-        <div className="flex gap-2 overflow-x-auto pb-1 mt-1">
+        <div className="flex gap-2 flex-wrap mt-2">
           {isTripReason ? (
             <button
               type="button"
               disabled
-              className="flex-shrink-0 px-4 py-1.5 rounded-full text-sm font-medium border bg-orange-500 text-white border-orange-500 opacity-60 cursor-not-allowed"
+              className="px-4 py-2 rounded-xl text-sm font-semibold border bg-orange-500 text-white border-orange-500 opacity-60 cursor-not-allowed"
             >
               Trip
             </button>
@@ -306,10 +313,10 @@ export function ExpenseForm({ vehicleId, vehicleName, expense, onSaved, onTripRe
                   form.setValue("reason", r, { shouldValidate: true });
                 }}
                 className={cn(
-                  "flex-shrink-0 px-4 py-1.5 rounded-full text-sm font-medium border transition-colors",
+                  "px-4 py-2 rounded-xl text-sm font-semibold border transition-all",
                   selectedReason === r
-                    ? "bg-orange-500 text-white border-orange-500"
-                    : "bg-white text-gray-600 border-gray-300"
+                    ? "bg-orange-500 text-white border-orange-500 shadow-sm"
+                    : "bg-white text-gray-600 border-gray-200 hover:border-orange-300"
                 )}
               >
                 {r}
@@ -326,13 +333,13 @@ export function ExpenseForm({ vehicleId, vehicleName, expense, onSaved, onTripRe
       {selectedReason === "Fuel" && (
         <div className="flex gap-3">
           <div className="flex-1">
-            <label className="text-sm font-medium text-gray-700">Litres filled</label>
+            <label className={labelClass}>Litres filled</label>
             <input
               type="number"
               inputMode="decimal"
               placeholder="e.g. 12.5"
               step="0.1"
-              className="mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm w-full bg-white focus:outline-none focus:ring-2 focus:ring-orange-400 text-gray-700"
+              className={inputClass}
               {...form.register("litresFilled", { valueAsNumber: true })}
             />
             {form.formState.errors.litresFilled && (
@@ -340,12 +347,12 @@ export function ExpenseForm({ vehicleId, vehicleName, expense, onSaved, onTripRe
             )}
           </div>
           <div className="flex-1">
-            <label className="text-sm font-medium text-gray-700">Odometer (km)</label>
+            <label className={labelClass}>Odometer (km)</label>
             <input
               type="number"
               inputMode="numeric"
               placeholder="e.g. 15240"
-              className="mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm w-full bg-white focus:outline-none focus:ring-2 focus:ring-orange-400 text-gray-700"
+              className={inputClass}
               {...form.register("odometerKm", { valueAsNumber: true })}
             />
             {form.formState.errors.odometerKm && (
@@ -357,7 +364,7 @@ export function ExpenseForm({ vehicleId, vehicleName, expense, onSaved, onTripRe
 
       {/* Where (optional) — service center picker when reason=Service, else free-text */}
       <div>
-        <label className="text-sm font-medium text-gray-700">Where</label>
+        <label className={labelClass}>Where</label>
         {selectedReason === "Service" ? (
           <ServiceCenterPicker
             value={selectedServiceCenter}
@@ -367,7 +374,7 @@ export function ExpenseForm({ vehicleId, vehicleName, expense, onSaved, onTripRe
           <input
             type="text"
             placeholder="e.g. Raj Motors, Bangalore"
-            className="mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm w-full bg-white focus:outline-none focus:ring-2 focus:ring-orange-400 text-gray-700"
+            className={inputClass}
             {...form.register("whereText")}
           />
         )}
@@ -375,14 +382,14 @@ export function ExpenseForm({ vehicleId, vehicleName, expense, onSaved, onTripRe
 
       {/* Comment (optional) */}
       <div>
-        <label className="text-sm font-medium text-gray-700">Your take</label>
+        <label className={labelClass}>Your take</label>
         <select
           value={form.watch("comment") ?? ""}
           onChange={(e) => {
             const v = e.target.value;
             form.setValue("comment", v ? (v as CreateExpenseInput["comment"]) : undefined);
           }}
-          className="mt-1 border border-gray-300 rounded-lg px-3 py-2 text-sm w-full bg-white focus:outline-none focus:ring-2 focus:ring-orange-400 text-gray-700"
+          className={inputClass}
         >
           <option value="">Your take (optional)</option>
           <option value="Underpriced">Great deal (Underpriced)</option>
@@ -394,23 +401,22 @@ export function ExpenseForm({ vehicleId, vehicleName, expense, onSaved, onTripRe
       {/* Receipt upload */}
       <div>
         {receiptPreview ? (
-          <div className="flex items-center justify-between border rounded-lg px-3 py-2">
+          <div className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5">
             <div className="flex items-center gap-2">
-              <Paperclip size={16} className="text-gray-500 flex-shrink-0" />
-              <span className="text-sm text-gray-700 truncate max-w-[160px]">{receiptFileName}</span>
+              <Paperclip size={15} className="text-orange-500 flex-shrink-0" />
+              <span className="text-sm text-gray-700 truncate max-w-[150px]">{receiptFileName}</span>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
               {hasExistingReceipt && !tempReceiptKey && (
                 <button
                   type="button"
                   onClick={handleViewReceipt}
-                  className="text-xs text-orange-600 font-medium"
+                  className="text-xs text-orange-500 font-semibold"
                 >
                   View
                 </button>
               )}
-              {/* Replace: show a file input disguised as a button */}
-              <label className="text-xs text-gray-500 cursor-pointer font-medium">
+              <label className="text-xs text-gray-500 cursor-pointer font-semibold">
                 Replace
                 <input
                   type="file"
@@ -423,7 +429,7 @@ export function ExpenseForm({ vehicleId, vehicleName, expense, onSaved, onTripRe
               <button
                 type="button"
                 onClick={handleRemoveReceipt}
-                className="text-xs text-red-500"
+                className="text-xs text-red-500 font-semibold"
               >
                 Remove
               </button>
@@ -432,14 +438,14 @@ export function ExpenseForm({ vehicleId, vehicleName, expense, onSaved, onTripRe
         ) : (
           <label
             className={cn(
-              "border border-dashed border-gray-300 rounded-lg px-4 py-3 flex items-center gap-2 text-gray-400 cursor-pointer hover:border-gray-400 transition-colors",
+              "border border-dashed border-gray-300 rounded-xl px-4 py-3 flex items-center gap-2.5 text-gray-400 cursor-pointer hover:border-orange-300 hover:text-orange-400 transition-colors",
               isUploadingReceipt && "opacity-50 cursor-not-allowed"
             )}
           >
             {isUploadingReceipt ? (
-              <Loader2 size={16} className="animate-spin" />
+              <Loader2 size={15} className="animate-spin" />
             ) : (
-              <Paperclip size={16} />
+              <Paperclip size={15} />
             )}
             <span className="text-sm">
               {isUploadingReceipt ? "Uploading…" : "Attach receipt (optional)"}
@@ -458,7 +464,7 @@ export function ExpenseForm({ vehicleId, vehicleName, expense, onSaved, onTripRe
       <button
         type="submit"
         disabled={isSubmitting || isUploadingReceipt}
-        className="bg-orange-500 text-white w-full py-3 rounded-lg font-semibold disabled:opacity-50"
+        className="bg-orange-500 text-white w-full py-3.5 rounded-xl font-semibold text-sm disabled:opacity-50 active:scale-[0.98] transition-transform"
       >
         {isSubmitting ? <Loader2 className="animate-spin mx-auto" size={20} /> : isEditMode ? "Update Expense" : "Save Expense"}
       </button>
@@ -467,9 +473,9 @@ export function ExpenseForm({ vehicleId, vehicleName, expense, onSaved, onTripRe
         <button
           type="button"
           onClick={() => setShowDeleteModal(true)}
-          className="w-full text-red-600 text-sm font-medium py-2 mt-2 flex items-center justify-center gap-2"
+          className="w-full text-red-500 text-sm font-medium py-1 flex items-center justify-center gap-2"
         >
-          <Trash2 size={16} />
+          <Trash2 size={15} />
           Delete Expense
         </button>
       )}

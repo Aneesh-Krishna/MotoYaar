@@ -28,12 +28,10 @@ function mapExpense(row: typeof expenses.$inferSelect): Expense {
   };
 }
 
-async function calculateKmpl(
+async function findPrevFuelExpense(
   vehicleId: string,
-  currentOdometer: number,
-  litresFilled: number,
   excludeId?: string
-): Promise<number | null> {
+): Promise<typeof expenses.$inferSelect | null> {
   const conditions = [
     eq(expenses.vehicleId, vehicleId),
     eq(expenses.reason, "Fuel"),
@@ -41,15 +39,12 @@ async function calculateKmpl(
     isNull(expenses.deletedAt),
     ...(excludeId ? [ne(expenses.id, excludeId)] : []),
   ];
-  const prev = await db.query.expenses.findFirst({
-    where: and(...conditions),
-    orderBy: [desc(expenses.date), desc(expenses.createdAt)],
-  });
-
-  if (!prev?.odometerKm) return null;
-  const distanceKm = currentOdometer - prev.odometerKm;
-  if (distanceKm <= 0) return null;
-  return parseFloat((distanceKm / litresFilled).toFixed(2));
+  return (
+    (await db.query.expenses.findFirst({
+      where: and(...conditions),
+      orderBy: [desc(expenses.date), desc(expenses.createdAt)],
+    })) ?? null
+  );
 }
 
 export const expenseService = {
@@ -58,14 +53,22 @@ export const expenseService = {
     vehicleId: string | undefined,
     data: CreateExpenseInput
   ): Promise<Expense> {
-    let kmpl: number | null = null;
+    let prevExpense: typeof expenses.$inferSelect | null = null;
+    let kmplForPrev: number | null = null;
+
     if (
       vehicleId &&
       data.reason === "Fuel" &&
       data.odometerKm != null &&
       data.litresFilled != null
     ) {
-      kmpl = await calculateKmpl(vehicleId, data.odometerKm, data.litresFilled);
+      prevExpense = await findPrevFuelExpense(vehicleId);
+      if (prevExpense?.odometerKm != null) {
+        const distanceKm = data.odometerKm - prevExpense.odometerKm;
+        if (distanceKm > 0) {
+          kmplForPrev = parseFloat((distanceKm / data.litresFilled).toFixed(2));
+        }
+      }
     }
 
     const [expense] = await db
@@ -83,10 +86,17 @@ export const expenseService = {
         receiptKey: null,
         litresFilled: data.litresFilled != null ? String(data.litresFilled) : null,
         odometerKm: data.odometerKm ?? null,
-        kmpl: kmpl != null ? String(kmpl) : null,
+        kmpl: null,
         serviceCenterId: data.serviceCenterId ?? null,
       })
       .returning();
+
+    if (prevExpense && kmplForPrev != null) {
+      await db
+        .update(expenses)
+        .set({ kmpl: String(kmplForPrev) })
+        .where(eq(expenses.id, prevExpense.id));
+    }
 
     // Trigger km-based service reminder check when odometer is logged on a fuel expense
     if (vehicleId && data.reason === "Fuel" && data.odometerKm != null) {
@@ -167,16 +177,34 @@ export const expenseService = {
     const updatedOdometer = data.odometerKm !== undefined ? data.odometerKm : expense.odometerKm;
     const updatedLitres = data.litresFilled !== undefined ? data.litresFilled : (expense.litresFilled != null ? Number(expense.litresFilled) : null);
 
-    let newKmpl: string | null | undefined = undefined;
-    if (updatedReason !== "Fuel") {
-      newKmpl = null;
-    } else if (
+    // When odometer or litres change on a Fuel expense, recalculate kmpl on the previous expense
+    let prevExpenseForKmpl: typeof expenses.$inferSelect | null = null;
+    let kmplForPrev: number | null = null;
+    const odometerOrLitresChanged =
+      data.odometerKm !== undefined || data.litresFilled !== undefined || data.reason !== undefined;
+
+    if (
+      updatedReason === "Fuel" &&
       expense.vehicleId &&
       updatedOdometer != null &&
-      updatedLitres != null
+      updatedLitres != null &&
+      odometerOrLitresChanged
     ) {
-      const calculated = await calculateKmpl(expense.vehicleId, updatedOdometer, updatedLitres, expenseId);
-      newKmpl = calculated != null ? String(calculated) : null;
+      prevExpenseForKmpl = await findPrevFuelExpense(expense.vehicleId, expenseId);
+      if (prevExpenseForKmpl?.odometerKm != null) {
+        const distanceKm = updatedOdometer - prevExpenseForKmpl.odometerKm;
+        if (distanceKm > 0) {
+          kmplForPrev = parseFloat((distanceKm / updatedLitres).toFixed(2));
+        }
+      }
+    }
+
+    // If reason changed away from Fuel, clear kmpl on the previous expense if it was set by this expense
+    if (updatedReason !== "Fuel" && expense.reason === "Fuel" && expense.vehicleId) {
+      const prevForClear = await findPrevFuelExpense(expense.vehicleId, expenseId);
+      if (prevForClear) {
+        await db.update(expenses).set({ kmpl: null }).where(eq(expenses.id, prevForClear.id));
+      }
     }
 
     const [updated] = await db
@@ -189,13 +217,23 @@ export const expenseService = {
         comment: data.comment ?? null,
         litresFilled: data.litresFilled !== undefined ? (data.litresFilled != null ? String(data.litresFilled) : null) : undefined,
         odometerKm: data.odometerKm !== undefined ? (data.odometerKm ?? null) : undefined,
-        ...(newKmpl !== undefined && { kmpl: newKmpl }),
+        kmpl: undefined,
         ...(newReceiptKey !== undefined && { receiptKey: newReceiptKey }),
         ...(newReceiptUrl !== undefined && { receiptUrl: newReceiptUrl }),
         ...(data.serviceCenterId !== undefined && { serviceCenterId: data.serviceCenterId ?? null }),
       })
       .where(eq(expenses.id, expenseId))
       .returning();
+
+    if (prevExpenseForKmpl && kmplForPrev != null) {
+      await db
+        .update(expenses)
+        .set({ kmpl: String(kmplForPrev) })
+        .where(eq(expenses.id, prevExpenseForKmpl.id));
+    } else if (prevExpenseForKmpl && kmplForPrev == null && odometerOrLitresChanged) {
+      // Distance was invalid (<=0) or missing data — clear stale kmpl on prev
+      await db.update(expenses).set({ kmpl: null }).where(eq(expenses.id, prevExpenseForKmpl.id));
+    }
 
     return mapExpense(updated);
   },
