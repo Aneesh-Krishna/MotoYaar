@@ -46,6 +46,12 @@ vi.mock("@/lib/logger", () => ({
   logger: { error: vi.fn() },
 }));
 
+vi.mock("@/services/serviceReminderService", () => ({
+  serviceReminderService: {
+    checkKmRemindersForVehicle: vi.fn().mockResolvedValue(undefined),
+  },
+}));
+
 // ─── Imports (after mocks) ────────────────────────────────────────────────────
 
 import { db } from "@/lib/db/client";
@@ -56,6 +62,7 @@ import { expenseService } from "../expenseService";
 const USER_ID = "user-1";
 const VEHICLE_ID = "vehicle-1";
 const EXPENSE_ID = "expense-1";
+const PREV_EXPENSE_ID = "prev-expense-1";
 
 function makeDbRow(overrides: Record<string, unknown> = {}) {
   return {
@@ -74,6 +81,9 @@ function makeDbRow(overrides: Record<string, unknown> = {}) {
     litresFilled: null,
     odometerKm: null,
     kmpl: null,
+    serviceCenterId: null,
+    deletedAt: null,
+    deletedByOwner: null,
     createdAt: new Date("2026-05-01T10:00:00Z"),
     ...overrides,
   };
@@ -93,34 +103,42 @@ describe("expenseService — fuel efficiency", () => {
     mockSelect.orderBy.mockReturnThis();
   });
 
-  describe("create — kmpl calculation", () => {
-    it("calculates and stores kmpl when previous odometer exists", async () => {
-      // Previous fuel expense with odometer 10000
-      mockFindFirst.mockResolvedValue(makeDbRow({ odometerKm: 10000 }));
-      const newRow = makeDbRow({ litresFilled: "10.00", odometerKm: 10350, kmpl: "35.00" });
+  describe("create — kmpl saved on previous expense", () => {
+    it("calculates kmpl and saves it on the previous expense, not the new one", async () => {
+      const prevRow = makeDbRow({ id: PREV_EXPENSE_ID, odometerKm: 1, litresFilled: "11.00" });
+      mockFindFirst.mockResolvedValue(prevRow);
+      const newRow = makeDbRow({ id: "expense-2", litresFilled: "10.00", odometerKm: 501, kmpl: null });
       mockInsertReturning.mockResolvedValue([newRow]);
+      mockUpdateReturning.mockResolvedValue([{ ...prevRow, kmpl: "50.00" }]);
 
       const result = await expenseService.create(USER_ID, VEHICLE_ID, {
         price: 800,
-        date: "2026-05-01",
+        date: "2026-05-10",
         reason: "Fuel",
         litresFilled: 10,
-        odometerKm: 10350,
+        odometerKm: 501,
       });
 
+      // New expense inserted with kmpl = null
       const insertedValues = (mockInsert.values as ReturnType<typeof vi.fn>).mock.calls[0][0];
-      expect(insertedValues.litresFilled).toBe("10");
-      expect(insertedValues.odometerKm).toBe(10350);
-      expect(insertedValues.kmpl).toBe("35");
-      expect(result.kmpl).toBe(35);
+      expect(insertedValues.kmpl).toBeNull();
+
+      // Previous expense updated with calculated kmpl: (501 - 1) / 10 = 50
+      const updateCalls = (db.update as ReturnType<typeof vi.fn>).mock.calls;
+      expect(updateCalls.length).toBe(1);
+      const setArgs = (mockUpdate.set as ReturnType<typeof vi.fn>).mock.calls[0][0];
+      expect(setArgs.kmpl).toBe("50");
+
+      // Returned expense has no kmpl
+      expect(result.kmpl).toBeUndefined();
     });
 
-    it("stores litres but skips kmpl calculation when no previous odometer", async () => {
+    it("stores litres and odometer but does not update any expense when no previous fuel expense", async () => {
       mockFindFirst.mockResolvedValue(null);
       const newRow = makeDbRow({ litresFilled: "12.00", odometerKm: 5000, kmpl: null });
       mockInsertReturning.mockResolvedValue([newRow]);
 
-      const result = await expenseService.create(USER_ID, VEHICLE_ID, {
+      await expenseService.create(USER_ID, VEHICLE_ID, {
         price: 900,
         date: "2026-05-01",
         reason: "Fuel",
@@ -129,28 +147,26 @@ describe("expenseService — fuel efficiency", () => {
       });
 
       const insertedValues = (mockInsert.values as ReturnType<typeof vi.fn>).mock.calls[0][0];
-      expect(insertedValues.litresFilled).toBe("12");
       expect(insertedValues.kmpl).toBeNull();
-      expect(result.kmpl).toBeUndefined();
+      // No update to previous expense
+      expect((db.update as ReturnType<typeof vi.fn>).mock.calls.length).toBe(0);
     });
 
-    it("stores litres only (no odometer) without error or kmpl", async () => {
+    it("stores litres only (no odometer) without error or kmpl side effects", async () => {
       const newRow = makeDbRow({ litresFilled: "8.00", odometerKm: null, kmpl: null });
       mockInsertReturning.mockResolvedValue([newRow]);
 
-      const result = await expenseService.create(USER_ID, VEHICLE_ID, {
+      await expenseService.create(USER_ID, VEHICLE_ID, {
         price: 600,
         date: "2026-05-01",
         reason: "Fuel",
         litresFilled: 8,
       });
 
-      // calculateKmpl should NOT be called (no odometerKm provided) — findFirst not called
       expect(mockFindFirst).not.toHaveBeenCalled();
       const insertedValues = (mockInsert.values as ReturnType<typeof vi.fn>).mock.calls[0][0];
-      expect(insertedValues.litresFilled).toBe("8");
       expect(insertedValues.kmpl).toBeNull();
-      expect(result.kmpl).toBeUndefined();
+      expect((db.update as ReturnType<typeof vi.fn>).mock.calls.length).toBe(0);
     });
 
     it("skips kmpl calculation for non-Fuel expenses", async () => {
@@ -164,44 +180,45 @@ describe("expenseService — fuel efficiency", () => {
       });
 
       expect(mockFindFirst).not.toHaveBeenCalled();
+      expect((db.update as ReturnType<typeof vi.fn>).mock.calls.length).toBe(0);
     });
   });
 
-  describe("update — kmpl recalculation", () => {
-    it("excludes current expense from previous-odometer lookup (R1 fix)", async () => {
-      const existingFuelRow = makeDbRow({ odometerKm: 10000, kmpl: "30.00", litresFilled: "10.00" });
-      const prevFuelRow = makeDbRow({ id: "prev-expense", odometerKm: 9500 });
-      const updatedRow = makeDbRow({ odometerKm: 10200, litresFilled: "10.00", kmpl: "70.00" });
+  describe("update — kmpl recalculated on previous expense", () => {
+    it("updates kmpl on previous expense when odometer changes, excludes self from lookup", async () => {
+      const existingFuelRow = makeDbRow({ id: EXPENSE_ID, odometerKm: 10000, litresFilled: "10.00", kmpl: null });
+      const prevFuelRow = makeDbRow({ id: PREV_EXPENSE_ID, odometerKm: 9500, litresFilled: "8.00", kmpl: null });
+      const updatedRow = makeDbRow({ id: EXPENSE_ID, odometerKm: 10200, litresFilled: "10.00", kmpl: null });
 
-      // First call: fetch the expense being updated; subsequent calls: calculateKmpl lookup
       mockFindFirst
         .mockResolvedValueOnce(existingFuelRow)  // expense lookup in update()
-        .mockResolvedValueOnce(prevFuelRow);      // calculateKmpl prev lookup (excludes self)
+        .mockResolvedValueOnce(prevFuelRow);      // findPrevFuelExpense (excludes self)
       mockUpdateReturning.mockResolvedValue([updatedRow]);
 
-      const result = await expenseService.update(EXPENSE_ID, USER_ID, {
-        odometerKm: 10200,
-        litresFilled: 10,
-      });
+      await expenseService.update(EXPENSE_ID, USER_ID, { odometerKm: 10200 });
 
-      // calculateKmpl was called and produced a value (not self-referencing)
-      const setArgs = (mockUpdate.set as ReturnType<typeof vi.fn>).mock.calls[0][0];
-      expect(setArgs.kmpl).not.toBeUndefined();
-      expect(result.kmpl).toBe(70);
+      // kmpl on previous expense: (10200 - 9500) / 10 = 70
+      const setArgsCalls = (mockUpdate.set as ReturnType<typeof vi.fn>).mock.calls;
+      // First update is the expense itself (kmpl: undefined), second is the prev expense
+      const prevUpdateSet = setArgsCalls.find((c: Record<string, unknown>[]) => c[0].kmpl !== undefined);
+      expect(prevUpdateSet?.[0].kmpl).toBe("70");
     });
 
-    it("clears kmpl when reason changes away from Fuel (R3 fix)", async () => {
-      const existingFuelRow = makeDbRow({ reason: "Fuel", odometerKm: 10000, kmpl: "30.00", litresFilled: "10.00" });
+    it("clears kmpl on previous expense when reason changes away from Fuel", async () => {
+      const existingFuelRow = makeDbRow({ reason: "Fuel", odometerKm: 10000, litresFilled: "10.00", kmpl: null });
+      const prevFuelRow = makeDbRow({ id: PREV_EXPENSE_ID, odometerKm: 9500, litresFilled: "8.00", kmpl: "87.50" });
       const updatedRow = makeDbRow({ reason: "Service", kmpl: null });
 
-      mockFindFirst.mockResolvedValue(existingFuelRow);
+      mockFindFirst
+        .mockResolvedValueOnce(existingFuelRow)
+        .mockResolvedValueOnce(prevFuelRow);
       mockUpdateReturning.mockResolvedValue([updatedRow]);
 
-      const result = await expenseService.update(EXPENSE_ID, USER_ID, { reason: "Service" });
+      await expenseService.update(EXPENSE_ID, USER_ID, { reason: "Service" });
 
-      const setArgs = (mockUpdate.set as ReturnType<typeof vi.fn>).mock.calls[0][0];
-      expect(setArgs.kmpl).toBeNull();
-      expect(result.kmpl).toBeUndefined();
+      const setArgsCalls = (mockUpdate.set as ReturnType<typeof vi.fn>).mock.calls;
+      const clearSet = setArgsCalls.find((c: Record<string, unknown>[]) => c[0].kmpl === null);
+      expect(clearSet).toBeDefined();
     });
   });
 
