@@ -1,0 +1,75 @@
+gate:
+  story: "2.3"
+  slug: onboarding-walkthrough-modal
+  epic: "02"
+  reviewer: Quinn (QA Agent)
+  model: claude-sonnet-4-6
+  reviewed_at: 2026-03-18
+  review_pass: 2026-03-18
+  decision: PASS
+
+summary: >
+  All must-fix and should-fix items from the initial CONCERNS review have been
+  resolved. Error handling added, saving state guards double-submission, JWT
+  session refreshed after successful PATCH, redundant custom prop cleaned up.
+  QA-2.3-03 (doc inconsistency in AC2 card order) is an acknowledged doc debt
+  — implementation is correct per Dev Notes; AC text to be updated in a doc pass.
+
+previous_decision: CONCERNS
+previous_reviewed_at: 2026-03-18
+
+resolved_items:
+  - id: QA-2.3-01
+    status: RESOLVED
+    verification: >
+      markWalkthroughSeen logic moved inline in handleAction, wrapped in
+      try/catch. res.ok checked; failure logged via console.error.
+      router.push("/") in finally block — user always redirects, never stranded.
+
+  - id: QA-2.3-02
+    status: RESOLVED
+    verification: >
+      saving state (useState<boolean>) added to WalkthroughPage.
+      setSaving(true) before fetch, setSaving(false) in finally.
+      disabled={saving} passed to WalkthroughModal; Skip, Next, and
+      Get started buttons all respect disabled prop with opacity + cursor styles.
+      "Get started" shows "Saving..." label while in-flight.
+
+  - id: QA-2.3-04
+    status: RESOLVED
+    verification: >
+      custom={direction} removed from both AnimatePresence motion.div children
+      in WalkthroughModal.tsx. Animations use direction from closure directly.
+
+  - id: QA-2.3-05
+    status: RESOLVED
+    verification: >
+      useSession().update() called after res.ok in handleAction.
+      JWT session now reflects walkthroughSeen=true immediately after PATCH,
+      preventing stale-token issues in Story 2.4.
+
+open_items:
+  - id: QA-2.3-03
+    severity: LOW
+    category: Documentation
+    status: DEFERRED
+    location: docs/stories/2.3.story.md — AC2
+    note: >
+      AC2 still lists "Community before Trips". Implementation and Dev Notes
+      both correctly use "Trips before Community". Dev agent is not authorized
+      to modify AC sections. Defer to a documentation cleanup pass or SM.
+
+ac_traceability:
+  AC1: PASS    # onboarding form redirects to /onboarding/walkthrough; page renders modal
+  AC2: PASS    # all 5 sections present; order follows Dev Notes (doc inconsistency deferred)
+  AC3: PASS    # h2 + p + Lucide icon per card
+  AC4: PASS    # all 5 copy strings match spec exactly
+  AC5: PASS    # Card 1 Skip+Next; Cards 2-4 Back+Skip+Next; Card 5 Back+Get started
+  AC6: PASS    # isLast swaps Next -> "Get started"; no Skip on card 5
+  AC7: PASS    # try/catch + res.ok check; redirect in finally; update() on success
+  AC8: PASS    # flow-controlled; direct navigation intentional for Story 2.4
+
+test_summary:
+  typecheck: PASS
+  unit_tests: N/A (not required per story)
+  e2e_tests: 2 stubs in e2e/auth.spec.ts (test.skip — pending session fixture)

@@ -29,6 +29,9 @@ pnpm install
 # Copy environment variables
 cp .env.example .env.local
 
+# Start PostgreSQL Docker Container
+docker run --name motoyaar-pg -e POSTGRES_PASSWORD=postgres -p 5432:5432 -d postgres:16
+
 # Fill in .env.local (see SETUP.md for detailed instructions)
 
 # Start development server

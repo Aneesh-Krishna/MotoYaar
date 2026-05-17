@@ -1,0 +1,189 @@
+story: "8.2 — PWA Push Notification Subscription"
+epic: "08 — Notifications & Background Jobs"
+reviewer: "Quinn (QA Agent, claude-sonnet-4-6)"
+reviewed_at: "2026-04-13"
+decision: PASS
+
+history:
+  - date: "2026-04-13"
+    decision: CONCERNS
+    reason: >
+      R1: usePushSubscription.subscribe() does not check the fetch response to POST /api/push/subscribe.
+      If the API returns 4xx/5xx, subscribe() still returns true — the UI believes the subscription
+      succeeded while the server never saved it to DB.
+  - date: "2026-04-13"
+    decision: PASS
+    reason: >
+      R1 resolved: fetch response now checked via res.ok; returns false with console.error on non-2xx.
+      Required test added: "subscribe() returns false when API returns non-2xx" — 7/7 tests pass.
+      Pre-existing typecheck error in pushService.test.ts (unsafe cast) fixed via unknown intermediary.
+      pnpm typecheck exit 0, pnpm lint exit 0.
+  - date: "2026-04-13"
+    decision: PASS
+    reason: >
+      Quinn verification pass. R1 fix confirmed correct by direct code inspection:
+      res.ok check at usePushSubscription.ts:36 is inside try block — both API non-2xx
+      (res.ok=false → return false) and network errors (catch → return false) handled correctly.
+      Test genuinely exercises the res.ok=false path via mocked fetch returning {ok:false,status:401}.
+      pushService.test.ts double-cast (as unknown as) correct TS pattern for mock narrowing.
+      7/7 tests pass, typecheck and lint clean. Gate confirmed PASS.
+
+summary: >
+  All required fixes resolved. R1: subscribe() now checks res.ok and returns false with
+  console.error on non-2xx — test added and passing. Pre-existing typecheck cast issue in
+  pushService.test.ts corrected. 7/7 tests pass, typecheck and lint clean. Three non-blocking
+  observations remain open (NB1-3) — none blocking.
+
+required_fixes:
+  - id: R1
+    status: RESOLVED
+    severity: medium
+    description: >
+      usePushSubscription.subscribe() does not check the HTTP response from POST /api/push/subscribe.
+      After fetch() resolves, the code proceeds to return true unconditionally — even if the server
+      returns 401 (session expired), 400 (bad subscription object), or 500 (DB error).
+
+      Location: src/hooks/usePushSubscription.ts:31-35
+        const subscription = await subscribeToPush();
+        if (!subscription) return false;
+
+        await fetch("/api/push/subscribe", {   ← response never inspected
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(subscription.toJSON()),
+        });
+        return true;   ← returned true even if fetch returned 4xx/5xx
+
+      Impact: The user sees "push enabled" but has no subscription in the DB.
+      On next app close, document expiry push notifications will silently not arrive.
+    location: "src/hooks/usePushSubscription.ts:31-35"
+    recommended_fix: >
+      Check res.ok before returning true:
+        const res = await fetch("/api/push/subscribe", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(subscription.toJSON()),
+        });
+        if (!res.ok) {
+          console.error("Failed to save push subscription:", res.status);
+          return false;
+        }
+        return true;
+    test_required: >
+      Add test to usePushSubscription.test.ts:
+      "subscribe() returns false when API returns non-2xx"
+      Setup: mock fetch to return { ok: false, status: 401 }; mock Notification.requestPermission
+      to return "granted"; mock subscribeToPush to return a fake PushSubscription.
+      Assert: subscribe() returns false.
+
+non_blocking:
+  - id: NB1
+    severity: low
+    status: OPEN
+    description: >
+      No user feedback when subscribe() returns false (permission denied, SW unavailable,
+      or API failure). PushPermissionPrompt.handleEnable() calls onComplete() regardless of
+      the subscribe() return value. The user is silently navigated away with no indication
+      that push was not enabled.
+
+      Location: src/components/notifications/PushPermissionPrompt.tsx:13-16
+        const handleEnable = async () => {
+          await subscribe();   ← return value discarded
+          onComplete();
+        };
+    recommendation: >
+      Consider using the return value to show a brief toast or inline message:
+        const success = await subscribe();
+        if (!success && permissionState !== "denied") {
+          // show "Couldn't enable notifications" message
+        }
+        onComplete();
+      AC3 doesn't mandate a success message, so this is advisory only.
+
+  - id: NB2
+    severity: low
+    status: OPEN
+    description: >
+      pushService.deleteSubscription(endpoint) deletes by endpoint alone without scoping
+      by userId. The schema's unique constraint is on (userId, endpoint) — not endpoint alone
+      — so theoretically two users could share an endpoint value, and a stale-subscription
+      deletion in one user's context would delete the other user's row.
+
+      In practice, browser push endpoints are globally unique per registration, so collision
+      is effectively impossible. But the function is semantically imprecise.
+
+      Location: src/services/pushService.ts:34-38
+    recommendation: >
+      Consider adding userId parameter:
+        async deleteSubscription(userId: string, endpoint: string): Promise<void> {
+          await db.delete(pushSubscriptions)
+            .where(and(eq(pushSubscriptions.userId, userId), eq(pushSubscriptions.endpoint, endpoint)));
+        }
+      Update call site in cronService.ts accordingly. Advisory only.
+
+  - id: NB3
+    severity: very-low
+    status: OPEN
+    description: >
+      PushPermissionPrompt has no backdrop overlay. The component uses fixed inset-0 z-50
+      but without a semi-transparent background, the WalkthroughModal behind it is visible,
+      creating a layered visual that looks unpolished on mobile (bottom sheet over another modal).
+
+      Location: src/components/notifications/PushPermissionPrompt.tsx:24
+    recommendation: >
+      Add a backdrop: replace the outer div's className with
+      "fixed inset-0 z-50 flex items-end justify-center sm:items-center bg-black/40 backdrop-blur-sm"
+      to match the WalkthroughModal pattern.
+
+ac_results:
+  - ac: 1
+    result: PASS
+    note: >
+      showPushPrompt starts false, set to true only after handleAction() (button click).
+      The walkthrough page renders WalkthroughModal first; PushPermissionPrompt replaces it
+      only post-completion. Prompt never shown on raw page load.
+  - ac: 2
+    result: PASS
+    note: >
+      Title "Stay on top of your documents" ✓. Description matches intent ✓.
+      "Enable" primary CTA ✓. "Not now" secondary ✓.
+  - ac: 3
+    result: PASS
+    note: >
+      Flow correct: requestPermission() → subscribeToPush() → POST. res.ok now checked;
+      returns false with console.error on non-2xx (R1 resolved).
+  - ac: 4
+    result: PASS
+    note: >
+      handleNotNow calls dismiss() → localStorage.setItem("pushPromptDismissed","true").
+      isDismissed() checked in walkthrough page before showing prompt. Tested.
+  - ac: 5
+    result: PASS
+    note: >
+      POST /api/push/subscribe → pushService.subscribe() → db.insert().onConflictDoUpdate().
+      Upsert target uses [userId, endpoint] matching actual schema composite unique constraint.
+  - ac: 6
+    result: PASS
+    note: >
+      Schema allows multiple rows per userId. getSubscriptionsForUser returns all.
+      Each device's endpoint is unique per (userId, endpoint) pair.
+  - ac: 7
+    result: PASS
+    note: >
+      cronService.ts:168-169 handles statusCode 410 by calling pushService.deleteSubscription().
+      Implemented in Story 8.1 — correctly covered here via shared pushService.
+  - ac: 8
+    result: N/A
+    note: "Deferred to Story 8.5 as explicitly stated in AC."
+  - ac: 9
+    result: PASS
+    note: "src/hooks/usePushSubscription.ts created. Full implementation, not stub. Tested."
+  - ac: 10
+    result: PASS
+    note: "src/components/notifications/PushPermissionPrompt.tsx created. Matches spec."
+  - ac: 11
+    result: PASS
+    note: "pushService.subscribe() added to src/services/pushService.ts. Upsert logic correct."
+  - ac: 12
+    result: PASS
+    note: "pnpm typecheck exit 0. pnpm lint exit 0 (pre-existing img warning unrelated)."

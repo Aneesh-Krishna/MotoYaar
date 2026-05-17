@@ -1,0 +1,143 @@
+gate:
+  story: "11.5"
+  slug: admin-invite-users
+  epic: "11"
+  date: "2026-04-26"
+  reviewer: Quinn (QA Agent)
+  decision: PASS
+  previous_decision: "PASS with CONCERNS (Review 1, 2026-04-26)"
+
+summary: >
+  Re-review 2 (2026-04-26): Both OPEN concerns from Review 1 resolved and verified.
+  C1 — DB insert now precedes sendBetaInviteEmail in adminService.ts:283-287; retry-safe,
+  no phantom sends on DB failure. C2 — Test 3 mock setup moved before call; result.sent
+  and result.failed assertions added; valid-email branch now explicitly tested by intent.
+  All 10 ACs remain PASS. 5/5 tests pass. typecheck and lint clean. Gate confirmed PASS.
+
+acceptance_criteria:
+  - id: AC1
+    description: "Invite users section in admin users page"
+    result: PASS
+    evidence: "InviteSection component rendered in UsersClient.tsx below the user management table"
+
+  - id: AC2
+    description: "Textarea accepting one email per line or comma-separated"
+    result: PASS
+    evidence: "parseEmails() splits on /[\\n,]+/; textarea UI with correct placeholder text"
+
+  - id: AC3
+    description: "On submit: send invite email + create admin_invites record per valid address"
+    result: PASS
+    evidence: "bulkInviteUsers sends via sendBetaInviteEmail then upserts into admin_invites (onConflictDoUpdate)"
+
+  - id: AC4
+    description: "Email: 'You're invited to join MotoYaar' + link to https://motoyaar.app/login"
+    result: PASS
+    evidence: "Subject exact match in sendEmail call; URL hardcoded in bulkInviteUsers; CTA button links to correct URL"
+
+  - id: AC5
+    description: "No invite expiry for admin-sent invites"
+    result: PASS
+    evidence: "admin_invites schema has no expires_at column; no expiry logic in service"
+
+  - id: AC6
+    description: "Bulk result shown: Sent / Already registered / Invalid counts"
+    result: PASS
+    evidence: "UI renders all four counters (sent, alreadyRegistered, invalid, failed); failed shown conditionally"
+
+  - id: AC7
+    description: "POST /api/admin/users/invite { emails: string[] }"
+    result: PASS
+    evidence: "Route at src/app/api/admin/users/invite/route.ts; zod validates array min 1 max 100; auth guard present"
+
+  - id: AC8
+    description: "emailService.sendBetaInviteEmail(email, inviteUrl)"
+    result: PASS
+    evidence: "Method at emailService.ts:59; correct signature and HTML template"
+
+  - id: AC9
+    description: "admin_invites table: email, sent_at; status from users table check"
+    result: PASS
+    evidence: "Migration 0011_admin_invites.sql correct; Drizzle schema in src/lib/db/schema.ts; UNIQUE on email; registration check via db.query.users.findFirst"
+
+  - id: AC10
+    description: "pnpm typecheck and pnpm lint pass"
+    result: PASS
+    evidence: "Both verified clean by dev agent (exit code 0); pre-existing img warnings in unrelated files only"
+
+open_items:
+  - id: C1
+    severity: medium
+    title: "Email sent before DB record — phantom send on DB failure"
+    status: RESOLVED
+    detail: >
+      bulkInviteUsers (adminService.ts:283-288) calls sendBetaInviteEmail before the
+      db.insert(adminInvites) call. If the DB insert throws, the email was already delivered
+      but the result is counted as 'failed'. On admin retry the recipient receives a duplicate
+      invite. For current beta volumes the blast radius is minimal, but the count reporting
+      is misleading and retry behavior is unpredictable.
+    recommendation: >
+      Reverse the order: insert the admin_invites record first, then send the email.
+      A failed send (with record present) is detectable and recoverable; a sent email
+      with no DB record is invisible to the admin.
+
+  - id: C2
+    severity: low
+    title: "Dead mock setup in test 3 leaves valid-email branch implicitly untested"
+    status: RESOLVED
+    detail: >
+      In adminService.bulkInvite.test.ts:89-90, mockUsersFindFirst and mockSendBetaInvite
+      are configured AFTER the expect assertion — they have no effect on the test run.
+      The test also does not assert result.sent or result.failed for the valid address
+      good@example.com. The test passes by coincidence (vi.fn returns undefined which
+      resolves correctly) rather than by design.
+    recommendation: >
+      Move mock setup before the bulkInviteUsers call. Add: expect(result.sent).toBe(1)
+      and expect(result.failed).toBe(0) to explicitly verify the valid email was processed.
+
+  - id: C3
+    severity: low
+    title: "N+1 DB queries for batch email lookup"
+    status: ACKNOWLEDGED
+    detail: >
+      bulkInviteUsers issues one sequential users.findFirst per valid email (up to 100
+      round-trips). A single inArray(users.email, validEmails) query would batch all lookups.
+      Acceptable at the 100-email cap for a low-frequency admin tool.
+
+  - id: C4
+    severity: info
+    title: "No client-side guard for > 100 emails in textarea"
+    status: ACKNOWLEDGED
+    detail: >
+      The API rejects arrays > 100 (zod). The UI has no pre-flight count or warning,
+      so an admin pasting 150 emails receives a generic error with no guidance on the limit.
+
+  - id: C5
+    severity: info
+    title: "inviteUrl parameter vestigial in sendBetaInviteEmail"
+    status: ACKNOWLEDGED
+    detail: >
+      bulkInviteUsers always passes the hardcoded "https://motoyaar.app/login". The
+      parameter on sendBetaInviteEmail is never varied. No functional issue; consistent
+      with spec signature.
+
+risks: []
+
+resolved_concerns:
+  - id: C1
+    title: "Email sent before DB record — phantom send on DB failure"
+    resolution: >
+      adminService.ts bulkInviteUsers now executes db.insert(adminInvites).onConflictDoUpdate
+      before emailService.sendBetaInviteEmail. A failed DB write aborts cleanly with no email
+      sent. A failed email send leaves the tracking record present and observable to the admin.
+
+  - id: C2
+    title: "Dead mock setup in test 3 leaves valid-email branch implicitly untested"
+    resolution: >
+      adminService.bulkInvite.test.ts test 3 refactored: mockUsersFindFirst and
+      mockSendBetaInvite configured before the bulkInviteUsers call. Added
+      expect(result.sent).toBe(1) and expect(result.failed).toBe(0). Valid-email
+      branch is now verified by intent. All 5 tests pass.
+
+recommendations:
+  - "Consider a client-side email counter in InviteSection to surface the 100-email limit before submit (C4)"

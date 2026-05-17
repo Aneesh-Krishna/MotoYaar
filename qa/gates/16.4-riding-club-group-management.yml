@@ -1,0 +1,163 @@
+story: 16.4
+slug: riding-club-group-management
+epic: "16 — Groups & Club Features"
+reviewed_by: Quinn (qa agent, claude-sonnet-4-6)
+reviewed_date: 2026-05-07
+decision: PASS
+concerns_resolved_date: 2026-05-07
+
+# ─── AC Traceability ──────────────────────────────────────────────────────────
+acceptance_criteria:
+  - id: AC1
+    description: "Create club: name (unique/required), city (required), description (optional/≤300), logo (optional)"
+    result: PASS
+    evidence: "createClubSchema enforces all constraints; clubService.create checks name uniqueness; DB unique index on name"
+
+  - id: AC2
+    description: Creator becomes club admin
+    result: PASS
+    evidence: "clubService.create inserts clubMembers with role:'admin', status:'active' immediately after club creation"
+
+  - id: AC3
+    description: "Club has invite link (motoyaar.app/clubs/join/[code]) — shown to logged-in users"
+    result: PASS
+    evidence: "/clubs/join/[code] page with auth guard; JoinClubView shows club info + join prompt; invite code generated on create"
+
+  - id: AC4
+    description: "Joining requires admin approval (default) OR open join (auto-approved)"
+    result: PASS
+    evidence: "joinViaCode branches on joinPolicy; open→status:'active'; approval→status:'pending' + notifyAdmins. joinById delegates to joinViaCode server-side."
+
+  - id: AC5
+    description: "Admin can: approve/reject join requests, remove members, promote to admin, change settings"
+    result: PASS
+    evidence: "memberAction implements all four operations; MemberList UI provides all controls; admin identity verified via assertAdmin"
+
+  - id: AC6
+    description: "Club Profile Page: name, city, logo, description, member count, member list (names + profile pics)"
+    result: PASS
+    evidence: "ClubProfileView renders all fields; member count from correlated subquery; MemberList with user avatars"
+
+  - id: AC7
+    description: "Club Feed tab with club-scoped posts; scope selector in existing post form"
+    result: PASS
+    evidence: |
+      PostForm accepts clubId/clubName props; renders 'Posting to: [Club Name]' indicator.
+      ClubProfileView embeds PostForm above ClubFeed for active members.
+      handleClubPost POSTs to /api/posts with clubId; feedKey remounts ClubFeed on success.
+      Backend fully supports clubId on posts with membership verification.
+
+  - id: AC8
+    description: Club posts invisible in main community feed
+    result: PASS
+    evidence: "listPosts adds isNull(posts.clubId) to both pinned and regular query conditions"
+
+  - id: AC9
+    description: "Clubs section accessible from Community tab: user clubs + Create CTA + discover"
+    result: PASS
+    evidence: "ClubsView at /community/clubs; 'Clubs' pill + desktop sidebar entry in CommunityFeedView; Create button links to /community/clubs/new"
+
+  - id: AC10
+    description: User can belong to multiple clubs; no hard limit
+    result: PASS
+    evidence: "No limit enforced in service or schema; club_members uniqueness is (club_id, user_id) only"
+
+  - id: AC11
+    description: pnpm typecheck and pnpm lint pass
+    result: PASS
+    evidence: "Both commands clean; 690 tests pass (76 test files)"
+
+# ─── Blocking Concerns ────────────────────────────────────────────────────────
+concerns: []
+
+# ─── Non-blocking / Info ──────────────────────────────────────────────────────
+info:
+  - id: F3
+    title: "Race condition in invite code generation"
+    detail: |
+      Sequential findFirst-then-insert for invite code uniqueness has a small TOCTOU window.
+      DB constraint is the correct safety net; service should catch pg error 23505 and surface
+      a cleaner message or retry.
+    blocking: false
+
+  - id: F5
+    title: "getMembers returns pending/removed members to all active members"
+    detail: |
+      Non-admin active members can see pending and removed member statuses via the Members tab.
+      Consider filtering to status:'active' for non-admin callers.
+    blocking: false
+
+  - id: F8
+    title: "Test coverage gaps in clubService.test.ts"
+    detail: |
+      Missing: getById (NotFoundError + non-member inviteCode strip), joinById (happy path + NotFoundError),
+      update (conflict + non-admin), listForUser (search + discover strips inviteCode),
+      getMembers ForbiddenError, memberAction reject/remove/promote branches, notifyAdmins error path.
+      makeSelectChain is hoisted but never used — dead code.
+    blocking: false
+
+  - id: F9
+    title: "Search results may duplicate user's own clubs in discover section"
+    detail: |
+      ClubsView deduplicates search results against myClubs using the initial no-search load.
+      If the initial load hasn't completed when search fires, a user's own club could appear
+      in the discover section.
+    blocking: false
+
+  - id: N2
+    title: "handleClubPost redundantly overwrites clubId (harmless)"
+    detail: |
+      PostForm defaultValues seeds clubId from the clubId prop. handleClubPost then sends
+      { ...data, clubId: club.id }. Both values are the same UUID — no correctness issue.
+    blocking: false
+
+# ─── Resolved Findings ────────────────────────────────────────────────────────
+resolved:
+  - id: F1
+    title: "AC7 Partial — No UI to create club-scoped posts"
+    resolution: "PostForm extended with clubId/clubName props; compose form embedded above ClubFeed in ClubProfileView."
+    resolved_date: 2026-05-07
+
+  - id: F2
+    title: "Security — inviteCode exposed to non-members via GET /api/clubs/[id]"
+    resolution: "getById accepts requestingUserId; returns inviteCode:'' for non-members. API route and server page pass session.user.id."
+    resolved_date: 2026-05-07
+
+  - id: F4
+    title: "Security — inviteCode exposed in discovery search results"
+    resolution: "listForUser strips inviteCode from discover results via mapClub({ ...c, inviteCode: '' })."
+    resolved_date: 2026-05-07
+
+  - id: F6
+    title: "loadMembers missing from useEffect dependency array"
+    resolution: "loadMembers wrapped in useCallback([club.id]); useEffect dep array updated to [loadMembers]."
+    resolved_date: 2026-05-07
+
+  - id: F7
+    title: "Dead link — Settings icon routes to non-existent /clubs/[id]/settings"
+    resolution: "Settings icon and dead route removed from ClubProfileView."
+    resolved_date: 2026-05-07
+
+  - id: N1
+    title: "Join-from-profile broken — handleJoin used club.inviteCode which was '' for non-members"
+    resolution: |
+      clubService.joinById(clubId, userId) added — fetches inviteCode server-side from club ID,
+      delegates to joinViaCode. POST /api/clubs/[id]/join route added (auth-guarded).
+      joinClubById(clubId) client helper added to clubApi.ts.
+      ClubProfileView.handleJoin updated to call joinClubById(club.id) — no invite code in client.
+    resolved_date: 2026-05-07
+
+# ─── Summary ──────────────────────────────────────────────────────────────────
+summary: |
+  Review 3 — re-review after N1 fix.
+
+  N1 (join-from-profile broken) is fully resolved:
+  - clubService.joinById fetches inviteCode server-side and delegates to joinViaCode.
+  - POST /api/clubs/[id]/join is auth-guarded and returns 201 with status.
+  - ClubProfileView.handleJoin uses joinClubById(club.id) — inviteCode never sent to client.
+  - Both join paths (profile page + invite link) now work correctly.
+
+  All 11 ACs pass. No blocking concerns remain.
+  Four non-blocking items carry forward (F3, F5, F8, F9) — all minor, none blocking ship.
+
+  Decision: PASS — story is ready to ship.

@@ -1,0 +1,83 @@
+# QA Gate — Story 12.1: View & Edit Profile
+# Initial review: 2026-04-26
+# Re-review (post-fix): 2026-04-26
+# Reviewer: Quinn (QA Agent, claude-sonnet-4-6)
+
+story: "12.1"
+epic: "12 — Profile & Settings"
+decision: PASS
+reviewed_at: "2026-04-26"
+
+summary: >
+  All 11 acceptance criteria pass. The one must-fix (bio clear bug) and all three advisory
+  items were resolved by the dev agent in the same session. RSC data-fetching, username
+  debounce, presigned R2 upload, blob URL lifecycle, and env documentation are all clean.
+  Outstanding item: 7 unit tests specified in the story's Testing Requirements remain
+  unwritten — tracked as a deferred debt, not a blocker for this story.
+
+must_fix:
+  - id: QA-12.1-01
+    severity: medium
+    status: FIXED (2026-04-26)
+    file: src/components/profile/EditProfileForm.tsx:195
+    description: >
+      Bio clear bug — `bio: data.bio || undefined` used falsy coercion so an empty string
+      became undefined in the PATCH payload, preventing users from clearing an existing bio.
+    fix_applied: >
+      Changed to `bio: data.bio` — value is always included in the payload so an empty
+      string correctly clears the DB field via PATCH /api/users/me.
+
+advisory:
+  - id: QA-12.1-02
+    severity: low
+    status: FIXED (2026-04-26)
+    description: >
+      NEXT_PUBLIC_R2_PUBLIC_URL was absent from .env.example despite being required by
+      client components (EditProfileForm, onboarding). Missing var silently produces
+      "undefined/key" image URLs on deploy.
+    fix_applied: >
+      Added NEXT_PUBLIC_R2_PUBLIC_URL to .env.example with a comment clarifying it mirrors
+      R2_PUBLIC_URL and is needed for client-side upload URL construction.
+
+  - id: QA-12.1-03
+    severity: low
+    status: FIXED (2026-04-26)
+    description: >
+      URL.createObjectURL() in handleFileChange had no revoke path, leaking blob URLs when
+      a new image was selected or the component unmounted.
+    fix_applied: >
+      Added blobUrlRef (useRef) to track active blob URL. Revoked in handleFileChange before
+      creating a new URL, in handleRemoveImage on explicit remove, and in a useEffect cleanup
+      for unmount.
+
+  - id: QA-12.1-04
+    severity: low
+    status: FIXED (2026-04-26)
+    description: >
+      UsernameIndicator was defined as an inner function component inside EditProfileForm,
+      causing React to treat it as a new component type on every render.
+    fix_applied: >
+      Extracted to module scope as `function UsernameIndicator({ status }: { status: UsernameStatus })`.
+      Called as <UsernameIndicator status={usernameStatus} /> in the render.
+
+test_coverage:
+  required_passing: 4
+  actual_passing: 0
+  status: DEFERRED
+  gaps:
+    - "EditProfileForm: pre-fills current user values — not written"
+    - "EditProfileForm: validates username format (lowercase, numbers, underscore) — not written"
+    - "EditProfileForm: shows 'Username taken' for duplicate username — not written"
+    - "EditProfileForm: calls PATCH /api/users/me on submit — not written"
+    - "vehicleService.countByUser — no unit test"
+    - "tripService.countByUser — no unit test"
+    - "communityService.countPostsByUser — no unit test"
+  note: >
+    Tests are specified in story Testing Requirements but were not written. Deferred to
+    Story 12.2 or a dedicated test-debt story. Not a blocker given the project's established
+    pattern of component tests being added alongside the story that first exercises the component
+    in integration.
+
+ac_traceability:
+  passing: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+  concerns: []

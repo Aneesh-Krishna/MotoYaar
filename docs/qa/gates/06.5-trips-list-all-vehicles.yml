@@ -1,0 +1,66 @@
+schema: 1
+story: "6.5"
+story_title: "Trips List (All Vehicles)"
+gate: PASS
+status_reason: >
+  All 10 ACs met. All 3 CONCERNS from initial gate resolved: GET /api/trips route test added,
+  TripsListView filter behavior tests added, button-in-Link fixed to styled Link.
+  260/260 tests pass. Typecheck and lint clean.
+reviewer: "Quinn (Test Architect)"
+updated: "2026-04-05T20:04:00Z"
+
+top_issues: []
+
+waiver:
+  active: false
+
+quality_score: 100
+
+expires: "2026-04-19T00:00:00Z"
+
+evidence:
+  tests_reviewed: 21
+  risks_identified: 0
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    ac_gaps: []
+
+review_history:
+  - date: "2026-04-05T19:58:00Z"
+    gate: CONCERNS
+    issues: [ISSUE-1, ISSUE-2, ISSUE-3]
+    summary: "All ACs met. Three low-severity gaps: missing route test, missing filter tests, button-in-link."
+  - date: "2026-04-05T20:04:00Z"
+    gate: PASS
+    issues: []
+    summary: "All three CONCERNS resolved by Dev. 260/260 tests. Clean."
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: >
+      listByUser scopes to session userId. Auth enforced at API (getSession → 401)
+      and service (userId filter). Drizzle ORM parameterized queries prevent injection.
+  performance:
+    status: PASS
+    notes: >
+      Batch vehicle fetch via inArray avoids N+1.
+      Parallel Promise.all for trips + vehicles in RSC page.
+      No pagination — acceptable for current scale; tracked as future work.
+  reliability:
+    status: PASS
+    notes: >
+      Empty array returned (not null/undefined) on no trips.
+      handleApiError covers unexpected service failures.
+      Early return in listByUser when no trips.
+  maintainability:
+    status: PASS
+    notes: >
+      RSC + client component split follows established pattern.
+      All new code covered by unit tests. Two TripCard components documented.
+
+recommendations:
+  immediate: []
+  future:
+    - action: "Add pagination to tripService.listByUser for scale"
+      refs: ["src/services/tripService.ts"]

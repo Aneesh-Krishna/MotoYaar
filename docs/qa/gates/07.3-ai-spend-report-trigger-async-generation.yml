@@ -1,0 +1,91 @@
+schema: 1
+story: "7.3"
+story_title: "AI Spend Report (Trigger & Async Generation)"
+gate: PASS
+status_reason: >
+  All 13 ACs implemented and verified. Two issues found and resolved during review:
+  missing unit tests (now 11 tests written, all pass) and a null guard gap in runGeneration.
+  300/300 tests pass. Typecheck and lint clean.
+reviewer: "Quinn (Test Architect)"
+updated: "2026-04-13T11:40:00Z"
+
+quality_score: 88
+
+expires: "2026-04-27T00:00:00Z"
+
+evidence:
+  tests_reviewed: 11
+  test_results: "300/300 pass (full regression)"
+  typecheck: clean
+  lint: clean (1 pre-existing warning in onboarding/page.tsx — unrelated)
+  risks_identified: 4
+  risks_resolved: 2
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+    ac_gaps: []
+
+traceability:
+  AC1:  PASS  # OverallReportView: quota.freePerMonth - quota.usedThisMonth shown in button label
+  AC2:  PASS  # report.totalSpend === 0 → disabled button "No data to analyse"; service BadRequestError prevents DB insert
+  AC3:  PASS  # POST /api/reports/ai → requestReport → pending record → { reportId }
+  AC4:  PASS  # Sonner toast fired immediately after POST response; fire-and-forget generate call
+  AC5:  PASS  # quota && !quota.allowed → static text "Come back next month..."
+  AC6:  PASS  # checkQuota: ne(status, "failed") filter excludes failed records from count
+  AC7:  PASS  # QuotaExceededError → handleApiError → HTTP 403 QUOTA_EXCEEDED
+  AC8:  PASS  # Client fire-and-forget: fetch(/api/reports/ai/${reportId}/generate).catch(() => {})
+  AC9:  PASS  # aiReportService.requestReport(userId, periodLabel, expenseSnapshot) creates record
+  AC10: PASS  # generateReport(snapshot) called with ExpenseSnapshot in runGeneration
+  AC11: PASS  # status=ready, content set, notificationService.create() called on success
+  AC12: PASS  # catch sets status=failed; checkQuota ne() excludes failed from count
+  AC13: PASS  # typecheck clean; lint clean
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: >
+      All 3 endpoints guarded with getSession(). runGeneration validates reportId+userId
+      (no IDOR). expenseSnapshot assembled from structured data — low prompt injection risk.
+      periodLabel user-derived but stored as text only, not executed.
+  performance:
+    status: PASS
+    notes: >
+      checkQuota uses findMany instead of count(*) — negligible at MVP (max 1 row/user/month).
+      Fire-and-forget pattern ensures POST /api/reports/ai returns immediately.
+      AI generation runs in separate HTTP request lifecycle.
+  reliability:
+    status: PASS
+    notes: >
+      runGeneration catch block sets status=failed on any error — no silent failures.
+      Null guard added for missing expenseSnapshot. Idempotency: runGeneration returns
+      early if status != 'pending', preventing double-generation.
+  maintainability:
+    status: PASS
+    notes: >
+      FREE_REPORTS_PER_MONTH constant centralised in service. freePerMonth in quota
+      response avoids constant duplication across client/server. Clean separation of
+      requestReport (creates record) vs runGeneration (does AI work).
+
+top_issues: []
+
+recommendations:
+  immediate: []
+  future:
+    - action: >
+        Add Zod validation to POST /api/reports/ai body (periodLabel + expenseSnapshot shape).
+        Currently relies on TypeScript cast; malformed requests pass type-check but could
+        reach service with unexpected runtime types.
+      refs: ["src/app/api/reports/ai/route.ts:12"]
+      suggested_owner: dev
+
+    - action: >
+        Replace checkQuota findMany with count(*) query for correctness and future-proofing
+        if FREE_REPORTS_PER_MONTH is ever raised above 1.
+      refs: ["src/services/aiReportService.ts:18"]
+      suggested_owner: dev
+
+    - action: >
+        Fix button render priority: when quota exhausted AND totalSpend === 0,
+        "Come back next month" shows instead of "No data to analyse" (minor AC2 edge case).
+        Check !quota.allowed AFTER checking totalSpend === 0.
+      refs: ["src/components/reports/OverallReportView.tsx:351"]
+      suggested_owner: dev

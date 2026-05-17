@@ -1,0 +1,220 @@
+gate:
+  story: "3.2"
+  title: "Dashboard (Home Tab)"
+  epic: "03 — Vehicle Management"
+  reviewed_by: "Quinn (QA Agent)"
+  model: "claude-sonnet-4-6"
+
+# ─── Review 1: Pre-implementation (2026-03-19) ───────────────────────────────
+
+pre_implementation_review:
+  reviewed_at: "2026-03-19"
+  review_type: PRE_IMPLEMENTATION
+  decision: CONCERNS
+  resolved_by: "PO (Sarah) — 2026-03-19"
+  all_blockers_resolved: true
+
+  summary: >
+    Story was NOT ready for a dev agent to pick up as written. Two critical
+    spec/reality conflicts would have caused component duplication or broken
+    imports. PO updated story before development began.
+
+  findings:
+    - id: PRE-F1
+      severity: CRITICAL
+      status: RESOLVED
+      resolution: "PO updated AC 10 + Task 2 to audit ui/VehicleCard.tsx; TYPE_DISPLAY_MAP fix added"
+      title: "VehicleCard already existed at ui/ — story said create at vehicles/"
+      file: "src/components/ui/VehicleCard.tsx"
+
+    - id: PRE-F2
+      severity: CRITICAL
+      status: RESOLVED
+      resolution: "PO updated Task 1 to audit existing StatusBadge; showLabel satisfies compact need"
+      title: "StatusBadge already existed — Task 1 would have overwritten it"
+      file: "src/components/ui/StatusBadge.tsx"
+
+    - id: PRE-F3
+      severity: HIGH
+      status: RESOLVED
+      resolution: "RecentActivity = Expense & { vehicleName } type added to src/types/index.ts"
+      title: "Expense type lacked vehicleName field for Recent Activity display"
+      file: "src/types/index.ts"
+
+    - id: PRE-F4
+      severity: HIGH
+      status: RESOLVED
+      resolution: "Dev Notes updated with multi-join complexity note and Drizzle numeric→parseFloat warning"
+      title: "vehicleService.listByUser() complexity understated in story"
+      file: "src/services/vehicleService.ts"
+
+    - id: PRE-F5
+      severity: MEDIUM
+      status: RESOLVED
+      resolution: "Dev Notes updated: explicit instruction to remove PostCard/MOCK_POSTS and replace with placeholder"
+      title: "Community section: page.tsx had PostCard mock data; story said static placeholder"
+      file: "src/app/(app)/page.tsx"
+
+    - id: PRE-F6
+      severity: MEDIUM
+      status: RESOLVED
+      resolution: "Dev Notes Greeting section already specified IST RSC; no change needed"
+      title: "Greeting used client-side new Date() and hardcoded name"
+      file: "src/app/(app)/page.tsx"
+
+    - id: PRE-F7
+      severity: LOW
+      status: RESOLVED
+      resolution: "TYPE_DISPLAY_MAP added to VehicleCard.tsx in Task 2.3"
+      title: "VehicleCard type badge rendered raw type values, not display aliases"
+      file: "src/components/ui/VehicleCard.tsx"
+
+    - id: PRE-F8
+      severity: LOW
+      status: RESOLVED
+      resolution: "parseFloat() applied in vehicleService.listByUser() when mapping totalSpend"
+      title: "expense.price is string from Drizzle numeric — type mismatch risk"
+      file: "src/services/expenseService.ts"
+
+    - id: PRE-F9
+      severity: LOW
+      status: INFO
+      resolution: "Confirmed: AlertBanner reused in page.tsx — spec's inline div not used"
+      title: "AlertBanner already exists — richer than story's inline strip spec"
+      file: "src/components/ui/AlertBanner.tsx"
+
+# ─── Review 2: Post-implementation (2026-03-19) ──────────────────────────────
+
+post_implementation_review:
+  reviewed_at: "2026-03-19"
+  review_type: POST_IMPLEMENTATION
+  decision: PASS
+
+  summary: >
+    Post-implementation review. Story is functionally complete: 13/13 ACs
+    addressed, 35/35 tests passing, typecheck and lint clean. All HIGH/MEDIUM/LOW
+    findings resolved: F1 (<button>/<Link> nesting in EmptyState), F2 (kind
+    discriminator on RecentActivity), F3 (DRY — now imports getDocumentStatus
+    from utils). Same FAB defect in Story 3.1 also fixed in the same pass.
+    AC 7 (Recent Activity) intentionally stubbed pending Epic 05.
+
+  findings:
+    - id: F1
+      severity: HIGH
+      status: RESOLVED
+      resolved_at: "2026-03-19"
+      resolution: "Removed <button>; styles moved directly to <Link> in EmptyState"
+      title: "<button> nested inside <Link> in EmptyState — invalid HTML"
+      file: "src/app/(app)/page.tsx"
+      lines: "162-166"
+      detail: >
+        EmptyState wraps a <button> inside <Link> (which renders as <a>).
+        Interactive element inside interactive element — invalid HTML per spec.
+        Keyboard users may double-tab; screen readers announce both elements.
+        Same pattern as Story 3.1 FAB F1 (also unfixed). Fix: remove inner
+        <button>, apply all styles directly to <Link> (className, hover states).
+
+    - id: F2
+      severity: MEDIUM
+      status: RESOLVED
+      resolved_at: "2026-03-19"
+      resolution: "kind: 'expense' | 'trip' added to RecentActivity type in src/types/index.ts"
+      title: "RecentActivity type lacks kind discriminator for trip vs expense icon"
+      file: "src/types/index.ts"
+      detail: >
+        RecentActivity = Expense & { vehicleName } has no 'kind' field to
+        distinguish expenses vs trips when Epic 05 adds trip activity. The icon
+        logic in RecentActivitySection (always IndianRupee) will need to branch.
+        Add kind: 'expense' | 'trip' to RecentActivity before Epic 05
+        implements the real query, or define a union type at that point.
+
+    - id: F3
+      severity: LOW
+      status: RESOLVED
+      resolved_at: "2026-03-19"
+      resolution: "Removed local deriveDocumentStatus(); now imports getDocumentStatus() from @/lib/utils"
+      title: "deriveDocumentStatus() duplicates getDocumentStatus() from utils.ts"
+      file: "src/services/vehicleService.ts"
+      lines: "6-15"
+      detail: >
+        The local deriveDocumentStatus() reimplements logic already in
+        src/lib/utils.ts:getDocumentStatus(). Minor DRY gap; divergence risk
+        if notification window becomes per-user configurable
+        (User.notificationWindowDays). Import from utils instead. Follow-on.
+
+    - id: F4
+      severity: LOW
+      status: OPEN
+      title: "IST midnight edge: Intl.DateTimeFormat hour12:false may return '24'"
+      file: "src/app/(app)/page.tsx"
+      lines: "18-23"
+      detail: >
+        Some Node/V8 environments return "24" for midnight with hour12:false.
+        parseInt("24") = 24 → "Good night" (correct, but fragile). Add
+        hour = hour % 24 clamp after parseInt, or a clarifying comment.
+
+    - id: F5
+      severity: INFO
+      status: OPEN
+      title: "No React.cache() on vehicleService queries"
+      file: "src/services/vehicleService.ts"
+      detail: >
+        Three parallel DB queries fire on every dashboard navigation without
+        deduplication. Wrapping listByUser() with React.cache() would
+        deduplicate calls within the same RSC render tree. Follow-on for
+        Epic 05+ when data volume matters.
+
+  acceptance_criteria:
+    - ac: 1
+      result: PASS
+      note: "async RSC, getServerSession, vehicleService.listByUser()"
+    - ac: 2
+      result: PASS
+      note: "Delegated to layout — correctly not re-implemented in page"
+    - ac: 3
+      result: PASS
+      note: "IST via Intl.DateTimeFormat, 4-range time bands, session.user.name"
+    - ac: 4
+      result: PASS
+      note: "compact VehicleCard, TYPE_DISPLAY_MAP, StatusBadge, snap scroll"
+    - ac: 5
+      result: PASS
+      note: "Add Vehicle link at end of carousel, aria-label present"
+    - ac: 6
+      result: PASS
+      note: "AlertBanner (superior to spec), expired→danger, expiring→warning"
+    - ac: 7
+      result: PARTIAL
+      note: "Stubbed to [] per Epic 05 deferral — acknowledged in Dev Notes"
+    - ac: 8
+      result: PASS
+      note: "MOCK_POSTS/PostCard removed, static placeholder rendered"
+    - ac: 9
+      result: PASS
+      note: "F1 resolved: <button> removed, styles applied directly to <Link>"
+    - ac: 10
+      result: PASS
+      note: "ui/VehicleCard.tsx, TYPE_DISPLAY_MAP fix applied"
+    - ac: 11
+      result: PASS
+      note: "Audited only, showLabel satisfies compact need"
+    - ac: 12
+      result: PASS
+      note: "RefreshButton client component with router.refresh()"
+    - ac: 13
+      result: PASS
+      note: "typecheck exit 0, lint warning only pre-existing in onboarding page"
+
+  test_results:
+    unit_tests: "35/35 passing (7 StatusBadge + 9 VehicleCard + 18 BottomNav + 1 other)"
+    typecheck: PASS
+    lint: PASS
+    e2e_tests: "Not run — auth storageState not yet configured (Story 3.1 follow-on)"
+
+  readiness:
+    can_merge: true
+    blockers: []
+    follow_on:
+      - "F4: Add hour % 24 clamp in getIST() for midnight edge case"
+      - "F5: Wrap vehicleService.listByUser() in React.cache() for RSC deduplication"
+      - "Story 3.1: remaining follow-ons (E2E auth, SidebarNav FAB-equivalent, font-semibold active tab)"

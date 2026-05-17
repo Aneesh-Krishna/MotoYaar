@@ -1,0 +1,66 @@
+gate:
+  story: "5.1 — Add Expense"
+  epic: "05 — Expense Tracking"
+  reviewed_by: "Quinn (QA Agent)"
+  model: "claude-sonnet-4-6"
+  initial_review: "2026-03-21"
+  final_review: "2026-03-21"
+  decision: PASS
+
+ac_results:
+  AC1_bottom_sheet: PASS
+  AC2_all_fields: PASS
+  AC3_trip_redirect: PASS
+  AC4_past_date_warning: PASS
+  AC5_api_routes: PASS
+  AC6_expense_service: PASS
+  AC7_zod_schema: PASS
+  AC8_vehicle_context: PASS  # vehicleName prop now passed and displayed
+  AC9_save_close_refresh: PASS
+  AC10_typecheck_lint: PASS
+
+pass_rate: "10/10"
+
+test_results:
+  total_tests: 167
+  passed: 167
+  failed: 0
+  new_tests_added: 6
+  files:
+    - "src/components/expenses/__tests__/ExpenseForm.test.tsx"
+    - "src/services/__tests__/expenseService.create.test.ts"
+
+findings:
+  - id: F1
+    severity: CONCERN
+    summary: "Unit tests not written — story specifies 6 test scenarios"
+    status: RESOLVED
+    resolution: "6 tests written and passing (ExpenseForm ×4, expenseService.create ×2)"
+
+  - id: F2
+    severity: MINOR
+    summary: "AC8 vehicle field shows generic text, not vehicle name/registration"
+    status: RESOLVED
+    resolution: "vehicleName prop added; VehicleDetailTabs passes vehicle.name"
+
+  - id: F3
+    severity: INFORMATIONAL
+    summary: "reason='Trip' accepted by POST API directly (UI-only enforcement)"
+    status: DEFERRED
+    resolution: "Noted for Story 5.2/6.1 review"
+
+  - id: F4
+    severity: MINOR
+    summary: "whereText has no maxLength validation"
+    status: DEFERRED
+    resolution: "Deferred to Story 5.2"
+
+security: PASS
+typecheck: PASS
+lint: PASS
+
+blocking_issues: []
+non_blocking_issues: []
+deferred:
+  - "F3: Trip reason API enforcement (Story 5.2/6.1)"
+  - "F4: whereText maxLength (Story 5.2)"

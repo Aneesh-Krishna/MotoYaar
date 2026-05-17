@@ -1,0 +1,141 @@
+gate:
+  story: "7.1"
+  title: "Vehicle-Level Spend Report"
+  decision: CONCERNS
+  reviewed_by: Quinn (QA Agent)
+  reviewed_at: 2026-04-05
+  model: claude-sonnet-4-6
+
+summary: >
+  Core service logic, API authorization, chart rendering, table sorting, and Suspense/skeleton
+  are all correctly implemented. typecheck and lint pass cleanly. However three must-fix issues
+  block merge: (1) the Custom date filter button is a dead UI element with no navigation,
+  (2) chart tooltip currency is hardcoded ₹ violating AC14, and (3) no automated tests exist
+  despite specific testing requirements. Two additional concerns should be addressed.
+
+must_fix:
+  - id: MF-1
+    severity: functional-bug
+    ac: "12"
+    title: "Custom filter button does nothing — feature is unreachable from UI"
+    location: src/components/reports/VehicleReportView.tsx:66-67
+    detail: >
+      Clicking the "Custom" button hits `if (opt.value !== "custom") applyFilter(opt.value)`,
+      which is false, so no navigation occurs. The custom date inputs are gated behind
+      `currentFilter === "custom"` which requires `?filter=custom` in the URL — but there is
+      no code path that sets it. Custom range is completely inaccessible from the UI.
+    fix: >
+      Change the onClick to also navigate for custom: when opt.value === "custom", call
+      applyFilter("custom") (without from/to) to set the URL param and reveal the date inputs.
+
+  - id: MF-2
+    severity: ac-violation
+    ac: "14"
+    title: "Chart tooltips hardcode ₹ instead of using user currency"
+    location: >
+      src/components/reports/BarChartWidget.tsx:24,
+      src/components/reports/LineChartWidget.tsx:24,
+      src/components/reports/DonutChartWidget.tsx:28
+    detail: >
+      `SpendChart.tsx` accepts a `currency` prop but never forwards it to any widget.
+      All three widgets hardcode `₹${Number(value).toLocaleString("en-IN")}` in their
+      tooltip formatters. A user with USD currency will see ₹ on chart hover.
+      AC14 says "All amounts displayed in user's currency setting."
+    fix: >
+      Add `currency: string` prop to each widget's Props interface. Thread it down from
+      SpendChart → widget. Replace `₹${...}` with `formatCurrency(Number(value), currency)`.
+
+  - id: MF-3
+    severity: missing-tests
+    ac: "18 (implied)"
+    title: "No automated tests written — tasks 7.3-7.6 remain unchecked"
+    location: src/services/__tests__/, src/components/reports/__tests__/
+    detail: >
+      Dev Notes specify 8 unit/component test cases covering: ForbiddenError on bad ownership,
+      category aggregation, monthly series, date filter range, delta computation, BarChart render,
+      PieChart render, and skeleton loading. None of these exist. Story testing requirements
+      are fully unimplemented.
+    fix: >
+      Write tests per Dev Notes testing requirements. Minimum viable set:
+      reportService: throws ForbiddenError, aggregates correctly, respects date range.
+      SpendChart: renders BarChart when chartType=bar, renders PieChart when chartType=donut.
+
+should_fix:
+  - id: SF-1
+    severity: defensive-security
+    title: "listByVehicleAndRange has no access check"
+    location: src/services/expenseService.ts:194-209
+    detail: >
+      Unlike `listByVehicle` which calls `vehicleService.getWithAccessCheck`, the new
+      `listByVehicleAndRange` queries expenses directly by vehicleId with no authorization guard.
+      Current call sites (reportService) do the check upstream, so this is not currently
+      exploitable. However, any future caller could bypass authorization.
+    fix: Add `await vehicleService.getWithAccessCheck(vehicleId, userId)` and pass userId as param.
+
+  - id: SF-2
+    severity: ux-confusion
+    title: "Custom date inputs empty when URL already has from/to params"
+    location: src/components/reports/VehicleReportView.tsx:30-31
+    detail: >
+      `customFrom` and `customTo` are initialized to `""`. When navigating back to a page
+      with `?filter=custom&from=2025-01-01&to=2025-03-31`, the date fields render empty even
+      though data was fetched for that range. Users must re-enter dates to re-apply.
+    fix: >
+      Initialize state from searchParams:
+      `useState(searchParams.get("from") ?? "")` and `useState(searchParams.get("to") ?? "")`.
+
+advisory:
+  - id: A-1
+    severity: minor
+    title: "Delta shown when prevTotalSpend === 0 (misleading for new users)"
+    location: src/components/reports/VehicleReportView.tsx:46,135
+    detail: >
+      `hasDelta` logic shows the delta arrow even when prevTotalSpend = 0 and no previous
+      period data exists. Shows "↑ ₹5,000 vs previous period" when there was truly no
+      prior data, which is misleading. Also note the `currentFilter !== "all"` check in
+      `hasDelta` is redundant since line 135 already gates on `currentFilter !== "all"`.
+    fix: Only show delta when `report.prevTotalSpend > 0`.
+
+  - id: A-2
+    severity: minor
+    title: "buildMonthlySeries uses non-standard date string for sorting"
+    location: src/services/reportService.ts:77
+    detail: >
+      `new Date("01 Jan 2025")` is a non-standard date string. Works in V8/Node.js but
+      not guaranteed cross-environment. Use date-fns `parse(a, "MMM yyyy", new Date())`
+      for robustness.
+
+  - id: A-3
+    severity: minor
+    title: "Percentage rounding can produce totals ≠ 100%"
+    location: src/services/reportService.ts:130
+    detail: >
+      Independent Math.round per category can cause sum of percentages to be 99% or 101%
+      with certain distributions. Minor display-only issue; acceptable for MVP.
+
+traceability:
+  AC1:  PASS  # page.tsx exists as RSC
+  AC2:  PASS  # ExpensesTab already had the link
+  AC3:  PASS  # Three summary cards rendered
+  AC4:  PASS  # Delta line rendered (see A-1 for minor concern)
+  AC5:  PASS  # Bar/Line/Donut toggle buttons exist
+  AC6:  PASS  # BarChartWidget correct
+  AC7:  PASS  # LineChartWidget correct
+  AC8:  PASS  # DonutChartWidget correct
+  AC9:  PASS  # next/dynamic via widget pattern
+  AC10: PASS  # Chart/Table tab switcher
+  AC11: PASS  # SpendTable with 4 columns, sortable
+  AC12: FAIL  # Custom filter button unreachable (MF-1)
+  AC13: PASS  # Suspense + VehicleReportSkeleton
+  AC14: FAIL  # Currency prop not forwarded to chart widgets (MF-2)
+  AC15: PASS  # GET /api/reports/vehicles/[id] exists
+  AC16: PASS  # Server-side aggregation in reportService
+  AC17: PASS  # ForbiddenError → 403 via handleApiError
+  AC18: PASS  # typecheck and lint pass
+
+risk_assessment:
+  authorization:     LOW     # vehicleService.getWithAccessCheck correctly used
+  data_integrity:    LOW     # aggregation logic is clean and testable
+  bundle_size:       LOW     # recharts fully lazy-loaded via dynamic widgets
+  ux_completeness:   MEDIUM  # Custom filter is broken, date inputs don't pre-populate
+  test_coverage:     HIGH    # No tests at all for new service logic

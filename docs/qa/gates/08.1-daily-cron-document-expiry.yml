@@ -1,0 +1,270 @@
+story: "8.1 — Daily Cron Job for Document Expiry Checking"
+epic: "08 — Notifications & Background Jobs"
+reviewer: "Quinn (QA Agent, claude-sonnet-4-6)"
+reviewed_at: "2026-04-13"
+decision: PASS
+
+history:
+  - date: "2026-04-13"
+    decision: CONCERNS
+    reason: >
+      R1: notification body misleads users when mixing warning + expired docs in the same batch;
+      R2: error-isolation test passes for wrong reason (NaN silently skips; catch block never actually exercised);
+      R3: storageKey not cleared alongside storageUrl after R2 deletion;
+      R4: missing idempotency test for expiryNotifiedAt (AC6 guard only half-tested).
+  - date: "2026-04-13"
+    decision: PASS
+    reason: >
+      All four required fixes resolved. R1: body now correctly separates expired vs warning doc names.
+      R2: error-isolation test rewired to mock db.update to throw, actually exercising the catch block.
+      R3: storageKey cleared alongside storageUrl on R2 deletion. R4: expiryNotifiedAt idempotency test added.
+      NB1-3 also applied (CRON_SECRET guard, non-410 push logging, pluralization).
+      16/16 tests pass, typecheck and lint clean.
+  - date: "2026-04-13"
+    decision: PASS
+    reason: >
+      Quinn verification pass. All fixes confirmed correct by direct code inspection.
+      Two very-low observations added (NB4: unused MS_PER_DAY constant in tests;
+      NB5: dead expiredDoc variable in R1 test). Neither blocking. Gate confirmed PASS.
+
+summary: >
+  All required fixes verified correct. R1: body now uses expiredNames/warningNames split
+  with three-branch logic and correct pluralisation on both sides. R2: error-isolation test
+  genuinely exercises the catch block via db.update mock-throw; logger.error assertion on
+  failing docId confirmed. R3: storageKey cleared atomically with storageUrl; test assertion
+  updated. R4: expiryNotifiedAt idempotency test is logically correct for the daysUntilExpiry===0
+  path. NB1: CRON_SECRET undefined attack vector guarded and tested. NB2: non-410 push errors
+  logged at warn level with endpoint + userId. NB3: pluralisation applied in both mixed and
+  warning-only branches. 16/16 tests pass, typecheck and lint clean. Two very-low observations
+  remain open (see non_blocking NB4, NB5) — not blocking.
+
+required_fixes:
+  - id: R1
+    status: RESOLVED
+    severity: medium
+    description: >
+      Notification body text misleads when a user has both warning docs and expired docs
+      in the same cron batch.
+
+      Location: cronService.ts:138-147
+        const allDocs = [...warningDocs, ...expiredDocs];
+        const docNames = allDocs.map((d) => d.type).join(", ");
+        const body = hasExpired
+          ? `Your ${docNames} has expired. Please renew.`
+          : `Your ${docNames} is expiring soon.`;
+
+      When hasExpired=true, docNames includes BOTH warningDocs and expiredDocs.
+      Example: user has Insurance (expiring in 10 days, warning) and PUC (expired yesterday).
+      Message becomes: "Your Insurance, PUC has expired. Please renew." — incorrectly
+      stating Insurance has expired when it has not.
+    location: "src/services/cronService.ts:138-147"
+    recommended_fix: >
+      Split docNames into two sets. Compose the body to reflect reality:
+        const expiredNames = expiredDocs.map(d => d.type).join(", ");
+        const warningNames = warningDocs.map(d => d.type).join(", ");
+        let body: string;
+        if (expiredDocs.length > 0 && warningDocs.length > 0) {
+          body = `Your ${expiredNames} has expired. ${warningNames} is expiring soon.`;
+        } else if (expiredDocs.length > 0) {
+          body = `Your ${expiredNames} has expired. Please renew.`;
+        } else {
+          body = `Your ${warningNames} is expiring soon.`;
+        }
+    test_required: >
+      Add test: "notification body correctly distinguishes expired from warning docs"
+      Setup: user has one warning doc (Insurance, +5 days) and one expired doc (PUC, -1 day).
+      Assert: notificationService.create called with body containing both "PUC has expired"
+      and "Insurance is expiring soon" — NOT saying Insurance has expired.
+
+  - id: R2
+    status: RESOLVED
+    severity: medium
+    description: >
+      Test "continues processing after one document throws an error" passes for the
+      wrong reason — the catch block is never actually exercised.
+
+      Test uses expiryDate: "invalid-date". In cronService.ts:
+        const expiryDate = new Date("invalid-date");  // → Invalid Date object (no throw)
+        const daysUntilExpiry = Math.ceil(NaN / MS_PER_DAY);  // → NaN (no throw)
+
+      NaN comparisons (NaN < 0, NaN > 0, NaN === 0) all evaluate to false. The bad doc
+      is silently skipped without entering any branch — the try/catch is never triggered.
+      The test passes because the good doc still executes, but this gives false confidence
+      that the catch block actually protects against real errors (e.g., db.update throwing).
+    location: "src/services/__tests__/cronService.test.ts:212-224"
+    recommended_fix: >
+      Replace the invalid-date approach with a real error simulation. Mock db.update
+      to throw for the first doc but succeed for the second:
+        // Make db.update throw for bad-doc only
+        const { db } = await import("@/lib/db/client");
+        vi.mocked(db.update).mockImplementationOnce(() => {
+          throw new Error("DB connection lost");
+        });
+      Then assert: loggerError called with the bad doc's id, AND notification still sent
+      for the good doc. This actually exercises the catch block.
+    test_required: >
+      Rewrite test "continues processing after one document throws an error" to simulate
+      a real db.update failure for one doc and confirm (a) logger.error is called with
+      the failing docId, and (b) the subsequent good doc is still processed end-to-end.
+
+  - id: R3
+    status: RESOLVED
+    severity: low
+    description: >
+      After R2 deletion, storageUrl is set to null but storageKey is left unchanged,
+      creating a dangling reference to a deleted R2 object.
+
+      Location: cronService.ts:82-84
+        await db.update(documents)
+          .set({ storageUrl: null })  ← storageKey not cleared
+          .where(eq(documents.id, doc.id));
+
+      While this does not cause an immediate correctness bug (the guard is doc.storageUrl),
+      any future code that reads storageKey to determine whether a file exists in R2 would
+      incorrectly conclude the file is present after deletion.
+    location: "src/services/cronService.ts:82-84"
+    recommended_fix: >
+      Clear both fields atomically:
+        await db.update(documents)
+          .set({ storageUrl: null, storageKey: null })
+          .where(eq(documents.id, doc.id));
+    test_required: >
+      Update existing test "deletes R2 file when expired > 10 days ago" to also assert:
+        expect(mockUpdate.set).toHaveBeenCalledWith({ storageUrl: null, storageKey: null });
+
+  - id: R4
+    status: RESOLVED
+    severity: low
+    description: >
+      AC6 specifies that step 4 (expiry-day notification) must NOT fire if
+      expiryNotifiedAt is already set — "AND expiry_notified_at IS NULL". The test
+      suite covers the equivalent guard for expiryWarningNotifiedAt (step 3) but has
+      no corresponding test for expiryNotifiedAt (step 4). The implementation appears
+      correct, but the guard is untested.
+    location: "src/services/__tests__/cronService.test.ts (missing)"
+    recommended_fix: null
+    test_required: >
+      Add test: "does not send expiry-day notification when expiryNotifiedAt is already set"
+      Setup: doc with expiryDate = today (daysFromNow(0)) and expiryNotifiedAt: new Date().
+      Assert: notificationService.create NOT called, expiryNotifiedAt NOT updated again.
+
+non_blocking:
+  - id: NB1
+    severity: low
+    status: RESOLVED
+    description: >
+      CRON_SECRET undefined security gap. If the env var is missing, the auth check
+      becomes: authHeader !== "Bearer undefined". An attacker sending
+      "Authorization: Bearer undefined" would pass authentication.
+    location: "src/app/api/cron/document-expiry/route.ts:6"
+    recommendation: >
+      Add an explicit guard:
+        if (!process.env.CRON_SECRET || authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+          return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
+      Also add a test: "returns 401 when CRON_SECRET env var is not set".
+
+  - id: NB2
+    severity: low
+    status: RESOLVED
+    description: >
+      Non-410 push send errors are silently swallowed with no logging. The .catch()
+      inside subscriptions.map() only handles statusCode 410; all other error codes
+      are consumed without any trace. Same pattern flagged in Story 7.5 NB2.
+    location: "src/services/cronService.ts:160-165"
+    recommendation: >
+      Add an else branch in the per-subscription .catch():
+        .catch(async (err: { statusCode?: number }) => {
+          if (err.statusCode === 410) {
+            await pushService.deleteSubscription(sub.endpoint);
+          } else {
+            logger.warn({ err, endpoint: sub.endpoint, userId: user.id }, "Push send failed");
+          }
+        })
+
+  - id: NB3
+    severity: very-low
+    status: RESOLVED
+    description: >
+      When a user has only warning docs (no expired docs), the body says
+      "Your Insurance is expiring soon." using singular "is" even for multiple docs.
+      Minor grammar inconsistency when warningDocs.length > 1.
+    recommendation: >
+      Add pluralization: warningDocs.length > 1 ? "are expiring" : "is expiring".
+
+  - id: NB4
+    severity: very-low
+    status: OPEN
+    description: >
+      Unused MS_PER_DAY constant in test file. cronService.test.ts line 79 declares
+      `const MS_PER_DAY = 86_400_000` but it is never referenced anywhere in the test
+      helpers or assertions — daysFromNow() uses Date arithmetic directly.
+    location: "src/services/__tests__/cronService.test.ts:79"
+    recommendation: Remove the unused constant to keep the test file clean.
+
+  - id: NB5
+    severity: very-low
+    status: OPEN
+    description: >
+      Dead variable in R1 body-text test. The test at line 310 declares `expiredDoc`
+      (makeDoc with type "PUC", expiryDate daysFromNow(-1)) but never passes it to
+      mockDocsFindMany — the mock uses [warningDoc, todayDoc] only. The variable and
+      its comment are misleading.
+    location: "src/services/__tests__/cronService.test.ts:313-318"
+    recommendation: Remove the dead expiredDoc declaration and its stale comment.
+
+ac_results:
+  - ac: 1
+    result: PASS
+    note: "Stub replaced with full implementation"
+  - ac: 2
+    result: PASS
+    note: "Bearer check implemented and tested; NB1 notes hardening opportunity"
+  - ac: 3
+    result: PASS
+    note: "db.query.documents.findMany with isNotNull(expiryDate)"
+  - ac: 4
+    result: PASS
+    note: "Math.ceil((expiryDate - today) / MS_PER_DAY) matches spec exactly"
+  - ac: 5
+    result: PASS
+    note: "Guard: daysUntilExpiry > 0 && <= windowDays && !expiryWarningNotifiedAt"
+  - ac: 6
+    result: PASS
+    note: "Implementation correct; missing idempotency test (R4)"
+  - ac: 7
+    result: PASS
+    note: "daysUntilExpiry < 0 → status='expired'; tested"
+  - ac: 8
+    result: CONCERNS
+    note: "Deletion correct; storageKey not cleared alongside storageUrl (R3)"
+  - ac: 9
+    result: CONCERNS
+    note: "Batching correct; body text misleads when mixing warning + expired docs (R1)"
+  - ac: 10
+    result: PASS
+    note: "notificationService.create(userId, 'document_expiry', title, body, '/garage')"
+  - ac: 11
+    result: PASS
+    note: "emailService.sendDocumentExpiryEmail stub in place; Story 8.3 implements"
+  - ac: 12
+    result: PASS
+    note: "pushNotificationsEnabled checked; 410 handled; Promise.allSettled used"
+  - ac: 13
+    result: PASS
+    note: "Returns { processed, notified, deleted }; tested"
+  - ac: 14
+    result: PASS
+    note: "logger.info({ ...result }) on completion"
+  - ac: 15
+    result: CONCERNS
+    note: "Per-doc try/catch present; test gives false confidence — catch never exercised (R2)"
+  - ac: 16
+    result: PASS
+    note: "cronService.runDocumentExpiryCheck() exported from src/services/cronService.ts"
+  - ac: 17
+    result: PASS
+    note: "vercel.json not modified"
+  - ac: 18
+    result: PASS
+    note: "pnpm typecheck and pnpm lint both clean"

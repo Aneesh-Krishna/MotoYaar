@@ -1,0 +1,123 @@
+gate:
+  story: "9.4"
+  title: "Edit Post"
+  epic: "09 — Community"
+  reviewed_by: "Quinn (QA Architect)"
+  reviewed_at: "2026-04-21"
+  model: "claude-sonnet-4-6"
+  decision: PASS
+  rationale: >
+    Re-review after QA fixes applied. All 4 actionable concerns from the initial
+    CONCERNS gate have been resolved. CONCERN-1 (link clearing bug) fixed with
+    one-line change. CONCERN-3 (loading label) fixed via new loadingLabel prop.
+    CONCERN-4 (cancel button) added to EditPostView header. CONCERN-5 (missing
+    tests) resolved with 2 new tests. 30/30 unit tests pass, typecheck and lint
+    clean. CONCERN-2 (image visual pre-population) accepted as MVP limitation
+    inherited from PostForm Story 9.1. Gate upgraded CONCERNS → PASS.
+
+review_history:
+  - date: "2026-04-21"
+    decision: CONCERNS
+    concerns_count: 5
+    rationale: >
+      Initial review — structurally sound but 1 medium bug (link clearing),
+      3 low UX gaps, 1 missing test coverage gap identified.
+  - date: "2026-04-21"
+    decision: PASS
+    rationale: >
+      Re-review after fixes — all 4 actionable concerns resolved. CONCERN-2
+      accepted as MVP limitation. 30/30 tests pass.
+
+ac_traceability:
+  - ac: 1
+    status: PASS
+    note: "Kebab Edit button renders only when isOwnPost (PostDetailView.tsx:172). Ownership enforced at page level (redirect) and service level (ForbiddenError)."
+  - ac: 2
+    status: PASS
+    note: >
+      title, description, tags, link all pre-populated correctly.
+      Link clearing now works (CONCERN-1 fixed). imageKeys pre-populated
+      in form value and re-submitted on save — PostForm visual limitation
+      accepted as MVP (CONCERN-2 waived).
+  - ac: 3
+    status: PASS
+    note: "PostForm reused in EditPostView.tsx:63 with initialValues + submitLabel props."
+  - ac: 4
+    status: PASS
+    note: "PATCH /api/posts/[id] created in src/app/api/posts/[id]/route.ts. Auth guard, Zod validation, handleApiError wired."
+  - ac: 5
+    status: PASS
+    note: "isEdited: true set unconditionally in updatePost() .set() call (communityService.ts:245). Correct — idempotent on subsequent edits."
+  - ac: 6
+    status: PARTIAL
+    note: >
+      No dedicated editedAt column in schema. updatedAt: new Date() used instead.
+      Documented deviation — PostDetail.updatedAt already surfaces in the
+      'Edited' tooltip (PostDetailView.tsx:153). Functionally equivalent for MVP.
+  - ac: 7
+    status: PASS
+    note: "editHistory is append-only JSONB array. Each entry stores {title, description, editedAt: ISO8601}. Existing history preserved and extended (tested)."
+  - ac: 8
+    status: PASS
+    note: "EditPostView navigates to /community/[id] on success. RSC page re-fetches post, post.edited=true causes 'Edited' label to render automatically."
+  - ac: 9
+    status: PASS
+    note: "ForbiddenError thrown in updatePost() when userId !== post.userId. handleApiError maps it to 403. Unit tested."
+  - ac: 10
+    status: PASS
+    note: "No time constraint anywhere in the implementation."
+  - ac: 11
+    status: PASS
+    note: "communityService.updatePost(postId, userId, data) implemented with correct signature, ownership check, and all field updates."
+  - ac: 12
+    status: PASS
+    note: "pnpm typecheck: clean. pnpm lint: clean (one pre-existing warning in onboarding/page.tsx, not introduced by this story)."
+
+concerns:
+  - id: CONCERN-1
+    severity: medium
+    status: RESOLVED
+    fix: >
+      communityService.ts:243 — changed `existing.links` to `[]`.
+      `links: data.link ? [data.link] : []` — users can now clear a link.
+      New test "clears links when data.link is empty string" added and passing.
+
+  - id: CONCERN-2
+    severity: low
+    status: ACCEPTED (MVP)
+    description: >
+      Existing post images not visually pre-populated. PostForm limitation
+      inherited from Story 9.1. imageKeys preserved in form value and
+      re-submitted on save. Future improvement would add initialImagePreviews
+      prop to PostForm.
+
+  - id: CONCERN-3
+    severity: low
+    status: RESOLVED
+    fix: >
+      loadingLabel optional prop added to PostForm (default "Posting…").
+      EditPostView passes loadingLabel="Saving…". PostForm.tsx:335 now
+      uses loadingLabel instead of hardcoded string.
+
+  - id: CONCERN-4
+    severity: low
+    status: RESOLVED
+    fix: >
+      Cancel button added to EditPostView header (EditPostView.tsx:64-70).
+      onClick navigates to /community/[id] via router.push.
+
+  - id: CONCERN-5
+    severity: low
+    status: RESOLVED
+    fix: >
+      Two tests added to communityService.updatePost describe:
+      - "clears links when data.link is empty string" (exposes CONCERN-1 fix)
+      - "overrides existing images when data.imageKeys provided"
+      30/30 tests now passing.
+
+test_results:
+  unit_tests: "30/30 passing (7 total updatePost tests)"
+  typecheck: PASS
+  lint: PASS
+  new_tests_added: 7
+  coverage_gaps: []

@@ -1,0 +1,86 @@
+gate:
+  story: "4.6"
+  title: "Driver's License Management"
+  epic: "04 — Document Management"
+  reviewer: "Quinn (QA Agent)"
+  model: "claude-sonnet-4-6"
+  reviewed_at: "2026-03-19"
+  decision: PASS
+  qa_fixes_applied_at: "2026-03-19"
+
+summary: >
+  All 8 acceptance criteria met. 147/147 tests pass (18 test files). Typecheck and lint
+  clean. Implementation is additive and backward-compatible. Three advisory concerns
+  identified — none block release.
+
+acceptance_criteria:
+  - id: AC1
+    description: "DL accessible from Profile page with StatusBadge and Upload/Update CTA"
+    status: PASS
+  - id: AC2
+    description: "Same AI parse flow as Story 4.1"
+    status: PASS
+  - id: AC3
+    description: "DL stored with vehicleId=null, userId=currentUser, type=DL"
+    status: PASS
+  - id: AC4
+    description: "Separate API endpoints /api/users/me/documents/parse and /api/users/me/documents"
+    status: PASS
+  - id: AC5
+    description: "Profile DL section shows icon + expiry + StatusBadge or Not uploaded + Upload CTA"
+    status: PASS
+  - id: AC6
+    description: "Edit and delete available from Profile DL section"
+    status: PASS
+  - id: AC7
+    description: "DL included in daily cron check (vehicleId=null DB record)"
+    status: PASS
+  - id: AC8
+    description: "pnpm typecheck and pnpm lint pass"
+    status: PASS
+
+test_results:
+  total_tests: 149
+  passed: 149
+  failed: 0
+  new_tests: 10
+  test_files: 18
+
+security:
+  auth_on_all_routes: true
+  tempR2Key_ownership_validated: true
+  user_data_isolation: true
+  input_validation: true
+
+concerns:
+  - id: CONCERN-1
+    severity: advisory
+    disposition: WAIVED
+    reason: >
+      Consistent with vehicle detail page pattern used throughout the codebase.
+      Acceptable until query load becomes measurable.
+
+  - id: CONCERN-2
+    severity: advisory
+    disposition: FIXED
+    fix: >
+      Test fixtures updated to use string "2028-06-01" / "2020-01-01" to match actual
+      Drizzle date() return type. Two additional tests added: type-lock assertion
+      (createUserDocument always stores type=DL) and query filter assertion
+      (listUserDocuments calls findMany with a where clause).
+
+  - id: CONCERN-3
+    severity: advisory
+    disposition: N/A
+    reason: >
+      Dev agent not authorized to modify Acceptance Criteria section. Process gap only.
+
+files_reviewed:
+  - src/app/api/users/me/documents/parse/route.ts
+  - src/app/api/users/me/documents/route.ts
+  - src/services/documentService.ts
+  - src/components/documents/DocumentUpload.tsx
+  - src/components/documents/DocumentEditForm.tsx
+  - src/components/documents/DriverLicenseSection.tsx
+  - src/app/(app)/profile/driving-licence/page.tsx
+  - src/services/__tests__/documentService.user-documents.test.ts

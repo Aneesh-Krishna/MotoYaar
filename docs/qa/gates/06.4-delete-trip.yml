@@ -1,0 +1,76 @@
+story: "6.4 — Delete Trip with Cascade Warning"
+epic: "06 — Trip Logging"
+date: "2026-04-05"
+reviewer: "Quinn (QA Agent)"
+model: "claude-sonnet-4-6"
+
+decision: PASS
+
+summary: >
+  All acceptance criteria met. Both QA findings resolved: (1) API route tests added
+  covering 400/204/403/401/404 scenarios — the ?confirm=true guard now has automated
+  coverage; (2) tripService.delete() now wraps expense + trip deletes in db.transaction(),
+  matching the create() and update() patterns. 239/239 tests pass. Typecheck and lint clean.
+
+acceptance_criteria:
+  - id: AC1
+    status: PASS
+    note: "TripKebabMenu Delete item opens ConfirmModal via setShowDeleteModal(true)"
+  - id: AC2
+    status: PASS
+    note: "Exact AC text verbatim in ConfirmModal description prop"
+  - id: AC3
+    status: PASS
+    note: "deleteTrip() wrapper in tripApi.ts bakes in ?confirm=true; route returns 400 without it"
+  - id: AC4
+    status: PASS
+    note: "Ownership check (NotFoundError/ForbiddenError), findMany expenses, tx.delete(expenses), tx.delete(trips) — all present in transaction"
+  - id: AC5
+    status: PASS
+    note: "Grep confirms only one db.delete(trips) in codebase, correctly inside tripService.delete()"
+  - id: AC6
+    status: PASS
+    note: "router.push('/trips') called after toast.success in handleDelete"
+  - id: AC7
+    status: PASS
+    note: "onClose={() => setShowDeleteModal(false)} wired to both Cancel button and modal onClose"
+  - id: AC8
+    status: PASS
+    note: "pnpm typecheck and pnpm lint both clean (pre-existing img warning unrelated)"
+
+findings:
+  - id: FINDING-1
+    severity: medium
+    title: "API route tests not written despite being in Testing Requirements"
+    status: RESOLVED
+    resolution: >
+      Added src/app/api/trips/[id]/__tests__/delete.test.ts with 5 tests:
+      400 without ?confirm=true, 204 for owner, 403 for non-owner, 401 unauthenticated,
+      404 for missing trip. All pass.
+
+  - id: FINDING-2
+    severity: low
+    title: "tripService.delete() is non-atomic"
+    status: RESOLVED
+    resolution: >
+      Wrapped expense cascade delete + trip delete in db.transaction(), matching the
+      create() and update() patterns. Ownership check remains outside transaction (read-only).
+      Service tests updated to mock db.transaction and tx.delete.
+
+security: PASS
+performance: PASS
+nfr_notes: >
+  Authorization enforced at API layer (session check) and service layer (userId ownership check).
+  ?confirm=true guard prevents accidental deletion from direct API calls.
+  Drizzle ORM prevents SQL injection. No NFR concerns.
+
+test_summary:
+  total: 9
+  pass: 9
+  fail: 0
+  missing: []
+
+overall_suite:
+  total: 239
+  pass: 239
+  regression: PASS
