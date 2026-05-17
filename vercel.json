@@ -8,6 +8,10 @@
     {
       "path": "/api/cron/expire-live-sessions",
       "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/warmup",
+      "schedule": "0 * * * *"
     }
   ]
 }
