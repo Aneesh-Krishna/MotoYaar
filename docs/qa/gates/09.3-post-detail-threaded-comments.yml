@@ -1,0 +1,142 @@
+gate:
+  story: "9.3"
+  title: "Post Detail & Threaded Comments"
+  epic: "09 — Community"
+  reviewed_by: "Quinn (QA Architect)"
+  reviewed_at: "2026-04-15"
+  model: "claude-sonnet-4-6"
+  decision: PASS
+  rationale: >
+    Re-review after QA fixes applied. All 7 concerns from the initial CONCERNS gate
+    have been correctly resolved. 23/23 unit tests pass. typecheck and lint are clean.
+    All 16 acceptance criteria now fully satisfied including AC3 (mobile tooltip).
+    Gate upgraded from CONCERNS → PASS.
+
+review_history:
+  - date: "2026-04-15"
+    decision: CONCERNS
+    concerns_count: 7
+    rationale: "Initial review — all ACs functionally satisfied but 7 non-blocking concerns identified."
+  - date: "2026-04-15"
+    decision: PASS
+    rationale: "Re-review after fixes — all 7 concerns resolved. 23/23 tests pass."
+
+ac_traceability:
+  - ac: 1
+    status: PASS
+    note: "RSC page implemented; stub replaced; notFound() on missing post."
+  - ac: 2
+    status: PASS
+    note: "Title, description, images (carousel), link, tags, author avatar + name, timestamp all present."
+  - ac: 3
+    status: PASS
+    note: >
+      'Edited' label now uses Radix Tooltip (tooltip.tsx created from @radix-ui/react-tooltip).
+      Works on desktop hover and supports mobile long-press via Radix primitives.
+      Previously PARTIAL (native title attribute only).
+  - ac: 4
+    status: PASS
+    note: "Separate 👍 / 👎 counts displayed; disabled when unauthenticated."
+  - ac: 5
+    status: PASS
+    note: "Three-way toggle logic correct: same reaction removes, opposite switches. Optimistic UI with rollback on failure."
+  - ac: 6
+    status: PASS
+    note: "POST /api/posts/[id]/reactions implemented. Now also returns 404 for non-existent post (CONCERN-5 fix)."
+  - ac: 7
+    status: PASS
+    note: "Schema uniqueIndex on (postId, userId) confirmed. onConflictDoUpdate used correctly."
+  - ac: 8
+    status: PASS
+    note: >
+      2-level max now enforced both in UI AND server-side. addComment() validates:
+      (1) parent exists and belongs to same post, (2) parent is top-level (parentCommentId is null).
+      Previously UI-only enforcement.
+  - ac: 9
+    status: PASS
+    note: "Fixed-bottom comment input (auth-only). Reply button on top-level comments only. Reply errors now surface toast."
+  - ac: 10
+    status: PASS
+    note: "POST /api/posts/[id]/comments with auth guard and content validation."
+  - ac: 11
+    status: PASS
+    note: "GET /api/posts/[id]/comments with no auth required."
+  - ac: 12
+    status: PASS
+    note: "Top-level: asc(createdAt). Replies: asc(createdAt). Both correct."
+  - ac: 13
+    status: PASS
+    note: "CommentThread.tsx at correct path with expected interface signature."
+  - ac: 14
+    status: PASS
+    note: "getPost, addReaction, addComment, getComments all implemented on communityService."
+  - ac: 15
+    status: PASS
+    note: "Kebab menu via Popover. Edit/Delete for own posts, Report for others. Stubs to 9.4/9.5/9.6."
+  - ac: 16
+    status: PASS
+    note: "pnpm typecheck: clean. pnpm lint: clean."
+
+concerns_resolution:
+  - id: CONCERN-1
+    severity: medium
+    status: RESOLVED
+    fix: >
+      PostDetailView.tsx:213 — href sanitised with /^https?:\/\//i.test() check.
+      Falls back to '#' for non-http/https schemes. javascript: injection prevented.
+
+  - id: CONCERN-2
+    severity: low
+    status: RESOLVED
+    fix: >
+      communityService.ts:193-204 — addComment() now queries parent comment before inserting.
+      Throws BadRequestError if: parent not found, parent belongs to different post,
+      or parent is itself a reply (depth > 1). Three new unit tests cover all three paths.
+
+  - id: CONCERN-3
+    severity: low
+    status: RESOLVED
+    fix: >
+      communityService.ts:109 — commentCount now uses reduce() to sum top-level + replies.
+      PostDetailView.tsx:32-35 — totalCommentCount derived from commentList via same reduce.
+      Comment count heading now reflects all comments consistently.
+
+  - id: CONCERN-4
+    severity: low
+    status: RESOLVED
+    fix: >
+      CommentThread.tsx:56-58 — catch block added to handleSubmitReply.
+      toast.error("Failed to post reply") shown on API failure.
+
+  - id: CONCERN-5
+    severity: low
+    status: RESOLVED
+    fix: >
+      communityService.ts:151-155 — addReaction() now checks post existence first.
+      Throws NotFoundError (→ 404) rather than letting FK constraint produce a 500.
+      New unit test covers the non-existent post path.
+
+  - id: CONCERN-6
+    severity: low
+    status: RESOLVED
+    fix: >
+      communityService.test.ts — 9 new tests added:
+        getPost: found/not-found/userReaction-present/userReaction-absent/commentCount-with-replies (5)
+        addComment: depth-enforcement × 3 (level3/cross-post/orphan)
+        addReaction: non-existent post → NotFoundError (1)
+      Total: 23/23 tests passing (was 14/14).
+
+  - id: CONCERN-7
+    severity: low
+    status: RESOLVED
+    fix: >
+      src/components/ui/tooltip.tsx created using @radix-ui/react-tooltip (already in package.json).
+      PostDetailView.tsx:147-157 — 'Edited' span now wrapped in TooltipProvider/Tooltip/TooltipTrigger/TooltipContent.
+      Radix handles cross-platform accessibility including touch long-press.
+
+test_results:
+  unit_tests: "23/23 passing (was 14/14)"
+  typecheck: PASS
+  lint: PASS
+  new_tests_added: 9
+  coverage_gaps: []

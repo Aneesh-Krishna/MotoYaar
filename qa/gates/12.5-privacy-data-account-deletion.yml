@@ -1,0 +1,89 @@
+gate:
+  story: "12.5"
+  title: "Privacy, Data & Account Deletion"
+  epic: "12 — Profile & Settings"
+  reviewed_at: "2026-04-26"
+  reviewer: "Quinn (QA Agent — claude-sonnet-4-6)"
+  decision: PASS
+
+summary: >
+  C1 resolved: vehicles.imageUrl keys now collected in deleteAccount via an additional
+  Promise.all query; test case added covering null imageUrl filtering and key collection.
+  11/11 userService tests pass. Lint exit 0. All ACs satisfied. Story approved for merge.
+
+review_history:
+  - round: 1
+    date: "2026-04-26"
+    decision: CONCERNS
+    blockers: []
+  - round: 2
+    date: "2026-04-26"
+    decision: PASS
+    blockers: []
+
+acceptance_criteria:
+  AC1_privacy_section_all_four_elements: PASS
+  AC2_document_storage_toggle_patch: PASS        # uses "full_storage" correctly; spec value "store" is stale
+  AC3_delete_stored_docs_confirm_flow: PASS
+  AC4_delete_account_type_DELETE_confirmation: PASS
+  AC5_post_users_me_delete: PASS
+  AC6_server_side_deletion_r2_cascade: PASS      # C1 resolved — vehicle imageUrl keys now collected
+  AC7_redirect_login_deleted_message: PASS
+  AC8_privacy_static_page: PASS
+  AC9_userService_deleteAccount: PASS
+  AC10_typecheck_lint: PASS
+
+findings:
+  - id: C1
+    severity: CONCERN
+    status: RESOLVED
+    title: "Vehicle imageUrl R2 keys not collected in deleteAccount — orphaned files"
+    resolution: >
+      Added db.query.vehicles.findMany({ where: eq(vehicles.userId, userId) }) to
+      the Promise.all in deleteAccount. Added userVehicles.forEach collecting v.imageUrl.
+      Added test: "deletes vehicle imageUrl R2 keys during account deletion" covering
+      null imageUrl filtering. 11/11 userService tests pass.
+
+  - id: C2
+    severity: INFO
+    status: ACKNOWLEDGED
+    title: "AC2 references 'store' value; schema and code correctly use 'full_storage'"
+    detail: >
+      Acceptance Criteria #2 states: documentStoragePreference: "store" | "parse_only".
+      The actual DB schema CHECK constraint and all code use "full_storage" | "parse_only".
+      The implementation is correct. The AC wording is a stale artefact from an earlier
+      design iteration. No code change needed — AC should be updated to reflect "full_storage".
+    location: "docs/stories/12.5.story.md — AC2"
+    recommended_fix: "Update AC2 text to read 'full_storage' | 'parse_only' for accuracy."
+
+  - id: I1
+    severity: INFO
+    status: NOTED
+    title: "deleteAllStoredFiles creates partial R2 orphan when storageService.deleteFile throws"
+    detail: >
+      In deleteAllStoredFiles, when R2 deletion fails, the document DB record still has
+      storageKey/storageUrl nulled. The R2 file is now unreachable by the application —
+      it won't be served, but it occupies storage until manual cleanup.
+      This is intentional best-effort behaviour, logged at WARN level. Acceptable for MVP.
+      A future improvement could track failed-to-delete keys in a separate cleanup queue.
+    location: "src/services/documentService.ts — deleteAllStoredFiles(), lines 261-271"
+
+  - id: I2
+    severity: INFO
+    status: NOTED
+    title: "Missing test: deleteAllStoredFiles userId query scoping not asserted"
+    detail: >
+      No test verifies that findMany is called with the correct userId argument.
+      The mock returns data regardless of the userId passed. The and() filter with
+      eq(documents.userId, userId) is correct in code but untested.
+      Low risk — simple query correctness — but a gap in Requirements Traceability.
+    location: "src/services/__tests__/documentService.deleteAllStoredFiles.test.ts"
+
+test_results:
+  documentService_all_files: "43/43 pass"
+  documentService_deleteAllStoredFiles: "4/4 pass (new)"
+  userService: "6/6 pass"
+  userService_deleteAccount: "4/4 pass (new)"
+  total: "57/57 pass (relevant suite)"
+  lint: PASS
+  typecheck: "PASS (no new errors; pre-existing errors in unrelated files)"

@@ -1,0 +1,96 @@
+story: "4.2 — Manual Expiry Entry Fallback"
+epic: "04 — Document Management"
+reviewed_by: "Quinn (QA Agent)"
+reviewed_date: "2026-03-19"
+model: "claude-sonnet-4-6"
+re_reviewed_date: "2026-03-19"
+
+decision: PASS
+
+summary: >
+  Re-review following QA fix application. C2 (missing error path tests) resolved —
+  two tests added covering handleManualSave and handleSkip failure paths; error
+  propagation chain verified correct. C1 and C3 appropriately deferred.
+  105/105 tests passing, typecheck and lint clean. Story is ready to ship.
+
+# ─── AC Traceability ──────────────────────────────────────────────────────────
+
+ac_traceability:
+  AC1_manual_screen_trigger: PASS       # Both paths: null AI date + "Enter manually" btn
+  AC2_calendar_popover: PASS            # shadcn Calendar in Popover, lines 295-321
+  AC3_skip_incomplete: PASS             # handleSkip → parseStatus="incomplete", confirmed by test
+  AC4_save_manual_date: PASS            # handleManualSave → parseStatus="manual", confirmed by test
+  AC5_incomplete_docs_tab: DEFERRED     # Deferred to Story 4.3 by design; StatusBadge ready
+  AC6_edit_expiry_later: DEFERRED       # Deferred to Story 4.5 by design
+  AC7_same_bottomsheet: PASS            # Internal UploadScreen state machine, no new sheet
+  AC8_typecheck_lint: PASS              # Both clean
+
+# ─── Prior Story Debt Resolution ──────────────────────────────────────────────
+
+prior_debt_resolved:
+  - id: SF-3
+    from_story: "4.1"
+    title: "onManualEntry not wired in VehicleDetailTabs"
+    resolution: >
+      Better than deferred approach: onManualEntry prop removed entirely.
+      Manual entry now handled via internal UploadScreen state machine.
+      No external prop wiring needed.
+    status: RESOLVED
+
+# ─── Test Results ─────────────────────────────────────────────────────────────
+
+test_results:
+  total_tests: 105
+  passing: 105
+  failing: 0
+  typecheck: PASS
+  lint: PASS
+  new_test_file: "src/components/documents/__tests__/DocumentUpload.test.tsx"
+  tests_added: 7
+  coverage_gaps: []
+
+# ─── Advisory Concerns (non-blocking) ─────────────────────────────────────────
+
+concerns:
+  - id: C1
+    severity: LOW
+    title: "Inconsistent success UX between confirm and manual flows"
+    detail: >
+      Confirm screen success → setScreen("complete") shows "Document saved!" screen.
+      Manual screen success → toast.success() + onSuccess() closes sheet immediately.
+      Matches story spec intent but produces different user experiences.
+    recommendation: "Align to single success pattern in future cleanup story."
+    blocking: false
+
+  - id: C2
+    severity: ADVISORY
+    title: "No unit tests for API error paths in manual handlers"
+    detail: >
+      handleManualSave and handleSkip catch blocks call toast.error() but
+      this path is not exercised by any test. Not required by story spec.
+    recommendation: "Add error path tests in future test hardening pass."
+    blocking: false
+    status: RESOLVED
+    resolution: >
+      Two tests added in DocumentUpload.test.tsx:
+      "handleManualSave shows toast.error when API returns error" and
+      "handleSkip shows toast.error when API returns error".
+      Both verify toast.error called with server message and onSuccess not called.
+      105/105 tests passing.
+
+  - id: C3
+    severity: DOCUMENTATION
+    title: "Dev Notes date format inconsistency"
+    detail: >
+      Dev Notes reference 'd MMM yyyy' (short month) but AC 2.3 specifies
+      'd MMMM yyyy' (full month). Implementation correctly follows AC.
+    recommendation: "Update Dev Notes in future doc pass."
+    blocking: false
+
+# ─── Deferred Items ───────────────────────────────────────────────────────────
+
+deferred:
+  - "AC5: DocumentRow incomplete display → Story 4.3"
+  - "AC6: Edit expiry date on incomplete doc → Story 4.5"
+  - "C1: UX alignment between confirm and manual success flows → future cleanup story"
+  - "C3: Dev Notes date format doc fix → future doc pass"

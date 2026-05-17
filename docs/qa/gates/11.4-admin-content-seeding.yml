@@ -1,0 +1,108 @@
+# QA Gate — Story 11.4: Admin Content Seeding
+# Reviewed: 2026-04-25
+# Reviewer: Quinn (QA Agent, claude-sonnet-4-6)
+
+story: "11.4"
+epic: "11 — Admin Panel"
+decision: PASS
+reviewed_at: "2026-04-25"
+resolved_at: "2026-04-25"
+
+summary: >
+  Implementation is architecturally correct. DB migration, schema, seed script, API routes,
+  admin community page, and PostCard updates all satisfy their acceptance criteria. However,
+  the listPosts() refactoring to a two-query approach introduced 7 test regressions in the
+  existing communityService suite, and the two required pinned-priority tests (from the story's
+  Testing Requirements) were never written. Gate is CONCERNS — must fix tests before merge.
+
+must_fix:
+  - id: QA-1
+    severity: high
+    status: FIXED (2026-04-25)
+    file: src/services/__tests__/communityService.test.ts
+    description: >
+      7 test regressions caused by listPosts() now calling findMany twice (pinned + regular).
+      Existing tests use mockFindMany.mockResolvedValue(data) which returns the same data for
+      both calls, causing duplicated posts and broken sort/count expectations.
+      Fix: add mockFindMany.mockResolvedValueOnce([]) before each mockResolvedValue(testData)
+      call in the listPosts beforeEach blocks to simulate an empty pinned-posts result.
+    failing_tests:
+      - "communityService.listPosts > excludes hidden posts"
+      - "communityService.listPosts > returns newest first when sort=newest"
+      - "communityService.listPosts > paginates correctly with page param"
+      - "communityService.listPosts with q > returns posts matching title ILIKE"
+      - "communityService.listPosts with q > returns posts matching description ILIKE"
+      - "communityService.listPosts with q > ranks title matches before description matches"
+      - "communityService.listPosts with q > combines tag and q filters"
+
+  - id: QA-2
+    severity: high
+    status: FIXED (2026-04-25)
+    file: src/services/__tests__/communityService.test.ts
+    description: >
+      Required pinned-priority tests from the story Testing Requirements were never written.
+      Tasks 7.3 and 7.4 remain unchecked.
+      Must add:
+        describe("communityService.listPosts pinned priority") with:
+          - "returns pinned posts before regular posts regardless of score"
+          - "orders multiple pinned posts by pinnedAt DESC"
+      Use mockResolvedValueOnce(pinnedPosts) for the pinned query and
+      mockResolvedValueOnce(regularPosts) for the regular query.
+
+advisory:
+  - id: QA-A1
+    severity: low
+    file: src/app/api/admin/posts/route.ts:26
+    description: >
+      body.isPinned read directly from raw body — bypasses createPostSchema validation.
+      Admin-gated so no user-facing risk, but not type-safe. Add isPinned to schema.
+
+  - id: QA-A2
+    severity: low
+    file: src/app/api/admin/posts/route.ts:24-31
+    description: >
+      No transaction wraps createPost() + db.update() for isPinned. If the update fails,
+      post is created but not pinned. Acceptable for MVP.
+
+  - id: QA-A3
+    severity: low
+    file: src/services/adminService.ts:47
+    description: >
+      getAllPosts() fetches all posts into memory — no pagination. Acceptable for admin MVP.
+
+  - id: QA-A4
+    severity: low
+    file: src/app/admin/community/AdminCommunityClient.tsx:31
+    description: >
+      window.location.reload() after post creation. Use router.refresh() for cleaner UX.
+
+  - id: QA-A5
+    severity: low
+    file: src/app/admin/community/AdminCommunityClient.tsx:19-32
+    description: >
+      formError state is never populated on API error — errors silently swallowed.
+      Catch throw in handleCreatePost and set formError for user feedback.
+
+ac_traceability:
+  passing: [1, 2, 3, 4, 5, 6, 7, 8, 9]
+  concerns:
+    - ac: 6
+      note: "Code correct (pinnedAt DESC ordering in query). Test for this behavior missing (QA-2)."
+    - ac: 7
+      note: "Code correct (two-query approach). 7 test regressions against prior listPosts tests (QA-1)."
+
+test_coverage:
+  suites_checked:
+    - name: "communityService.listPosts"
+      passing: 3
+      failing: 3
+    - name: "communityService.listPosts with q"
+      passing: 2
+      failing: 4
+    - name: "PostCard"
+      passing: 4
+      failing: 0
+    - name: "communityService.listPosts pinned priority (required)"
+      passing: 0
+      failing: "MISSING — not written"
+  overall: "7 regressions + 2 required tests absent"

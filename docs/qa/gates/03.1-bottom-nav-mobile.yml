@@ -1,0 +1,124 @@
+gate:
+  story: "3.1"
+  title: "Bottom Navigation (Mobile)"
+  epic: "03 — Vehicle Management"
+  reviewed_by: "Quinn (QA Agent)"
+  reviewed_at: "2026-03-19"
+  model: "claude-sonnet-4-6"
+  decision: CONCERNS
+
+summary: >
+  Implementation is functionally complete and meets 9 of 10 ACs. Architecture
+  is clean (shared nav config, RSC layout, correct ARIA). Two items require
+  attention before merge: an invalid HTML structure in FAB (nested button inside
+  anchor) and non-functional E2E tests that will fail against authenticated
+  routes without auth setup. Missing sidebar FAB-equivalent is a spec gap to track.
+
+findings:
+  - id: F1
+    severity: HIGH
+    status: RESOLVED
+    resolved_at: "2026-03-19"
+    resolution: "Removed inner <button>; all styles and aria-label moved directly to <Link>"
+    title: "FAB renders <button> nested inside <Link> (<a>)"
+    file: "src/components/layout/FAB.tsx"
+    lines: "20-27"
+    detail: >
+      Invalid HTML — interactive element inside interactive element. Causes
+      keyboard and screen reader issues. Fix: remove inner <button>, apply
+      styles directly to <Link>.
+
+  - id: F2
+    severity: MEDIUM
+    status: OPEN
+    title: "E2E tests navigate to authenticated routes without auth setup"
+    file: "e2e/navigation.spec.ts"
+    detail: >
+      All 4 tests hit / which redirects to /login for unauthenticated users.
+      Tests need storageState or auth fixture to be meaningful in CI.
+
+  - id: F3
+    severity: MEDIUM
+    status: OPEN
+    title: "SidebarNav missing FAB-equivalent button (spec gap)"
+    file: "src/components/layout/SidebarNav.tsx"
+    detail: >
+      Dev notes specify a prominent FAB-equivalent CTA button in the sidebar.
+      Not implemented. Desktop users have no equivalent to the mobile FAB.
+
+  - id: F4
+    severity: LOW
+    status: OPEN
+    title: "Active tab label missing font-weight change"
+    file: "src/components/layout/BottomNav.tsx"
+    lines: "46"
+    detail: >
+      Spec requires color + weight change. Label span is always font-medium.
+      Recommend font-semibold on active label.
+
+  - id: F5
+    severity: LOW
+    status: OPEN
+    title: "pathname.startsWith may match on similar route prefixes"
+    files:
+      - "src/components/layout/FAB.tsx"
+      - "src/components/layout/BottomNav.tsx"
+      - "src/components/layout/SidebarNav.tsx"
+    detail: >
+      startsWith("/garage") matches "/garageX". Low risk with current routes
+      but startsWith(href + "/") || pathname === href is more robust.
+
+  - id: F6
+    severity: LOW
+    status: OPEN
+    title: "Test renders not cleaned up between tests"
+    file: "src/components/layout/__tests__/BottomNav.test.tsx"
+    detail: >
+      Missing afterEach cleanup() from @testing-library/react. Tests pass
+      currently but can become flaky as suite grows.
+
+  - id: F7
+    severity: LOW
+    status: INFO
+    title: "session.user.username widened to string | null"
+    file: "src/types/next-auth.d.ts"
+    detail: >
+      Pre-existing fix. Verify all session.user.username consumers handle null.
+
+acceptance_criteria:
+  - ac: 1
+    result: PASS
+  - ac: 2
+    result: PASS
+  - ac: 3
+    result: PASS
+  - ac: 4
+    result: PASS
+  - ac: 5
+    result: PASS
+  - ac: 6
+    result: PASS
+  - ac: 7
+    result: CONCERNS  # FAB renders but has invalid HTML structure
+  - ac: 8
+    result: PASS
+  - ac: 9
+    result: PASS
+  - ac: 10
+    result: PASS
+
+test_results:
+  unit_tests: "18/18 passing"
+  e2e_tests: "4 specs written — NOT RUN against real server (auth setup required)"
+  typecheck: PASS
+  lint: PASS
+
+recommended_actions:
+  before_merge:
+    - "Fix F1: Remove nested <button> from FAB — render Link directly as the FAB button"
+  track_as_followon:
+    - "F2: Add Playwright auth storageState fixture for E2E nav tests"
+    - "F3: Add FAB-equivalent button to SidebarNav (Epic 03 or dedicated story)"
+    - "F4: Add font-semibold to active tab label in BottomNav"
+    - "F5: Tighten startsWith route matching in nav/FAB components"
+    - "F6: Add afterEach cleanup() to BottomNav test file"

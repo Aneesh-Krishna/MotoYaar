@@ -1,0 +1,81 @@
+story: "6.3 — Edit Trip"
+epic: "06 — Trip Logging"
+date: "2026-03-26"
+reviewer: "Quinn (QA Agent)"
+model: "claude-sonnet-4-6"
+
+decision: PASS
+
+summary: >
+  All findings resolved. Vehicle removal now sends vehicleId:null (schema extended
+  to accept null); trip + expense writes wrapped in db.transaction(); test renamed
+  and updated to pass vehicleId:null and verify actual removal. 230/230 tests pass,
+  typecheck and lint clean.
+
+acceptance_criteria:
+  - id: AC1
+    status: PASS
+    note: "Edit page route created; kebab menu already wired from Story 6.2"
+  - id: AC2
+    status: PASS
+    note: "All fields pre-populated; full-page layout; date range toggle seeded from trip.endDate"
+  - id: AC3
+    status: PASS
+    note: "Vehicle change and removal both work; schema accepts null; form sends null on removal; service handles null correctly"
+  - id: AC4
+    status: PASS
+    note: "Expense price recalculated on breakdown change; tested"
+  - id: AC5
+    status: PASS
+    note: "PATCH handler + ownership check + Zod validation all correct"
+  - id: AC6
+    status: PASS
+    note: "router.refresh() + router.push() per nextjs-mutation-cache-refresh pattern"
+  - id: AC7
+    status: PASS
+    note: "pnpm typecheck and pnpm lint both clean"
+
+findings:
+  - id: FINDING-1
+    severity: medium
+    title: "Vehicle removal silently does nothing"
+    status: RESOLVED
+    resolution: >
+      updateTripSchema extended with vehicleId: z.string().uuid().nullable().optional().
+      TripEditForm defaultValues changed to vehicleId: trip.vehicleId ?? null.
+      Select onChange sends null on empty selection. handleSubmit no longer
+      normalizes vehicleId to undefined. Service correctly treats null as explicit removal.
+
+  - id: FINDING-2
+    severity: low
+    title: "Non-atomic trip + expense update"
+    status: RESOLVED
+    resolution: >
+      tripService.update() now wraps trip update + expense update in db.transaction(),
+      matching the create() pattern. Ownership check remains outside the transaction.
+
+  - id: FINDING-3
+    severity: low
+    title: "Test 'vehicle removed' does not test actual vehicle removal"
+    status: RESOLVED
+    resolution: >
+      Test renamed to 'sets expense vehicleId to null when vehicle explicitly removed'.
+      Now passes vehicleId: null and asserts expense update receives vehicleId: null.
+      Transaction mock updated throughout to use mockDbTransaction / mockTx.update.
+
+security: PASS
+performance: PASS
+nfr_notes: >
+  No NFR concerns. Authorization enforced at both RSC and API layers.
+  Zod validation prevents malformed input. Drizzle ORM prevents injection.
+
+test_summary:
+  total: 7
+  pass: 7
+  fail: 0
+  missing: []
+
+overall_suite:
+  total: 230
+  pass: 230
+  regression: PASS

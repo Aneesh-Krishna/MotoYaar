@@ -1,0 +1,65 @@
+gate:
+  story: "3.4"
+  title: "Vehicle Detail Page"
+  epic: "03 — Vehicle Management"
+  decision: PASS
+
+reviews:
+  - round: 1
+    reviewed_by: "Quinn (QA Agent — claude-sonnet-4-6)"
+    reviewed_at: "2026-03-19"
+    decision: CONCERNS
+    summary: >
+      Core implementation sound, all 13 ACs functionally satisfied.
+      Two must-fix items and three concerns identified.
+    must_fix: [F1, F2]
+    concerns: [F3, F4, F5]
+    advisory: [F6, F7, F8]
+
+  - round: 2
+    reviewed_by: "Quinn (QA Agent — claude-sonnet-4-6)"
+    reviewed_at: "2026-03-19"
+    fixed_by: "James Bond (Dev Agent — claude-sonnet-4-6)"
+    decision: PASS
+    summary: >
+      All must-fix and concern items resolved. 52 tests pass, typecheck clean,
+      lint clean. Story 3.4 is shippable.
+    verification:
+      F1: "FIXED — VehicleKebabMenu.tsx:40 — Delete wrapped in {isOwner && ...}"
+      F2: "FIXED — vehicleService.test.ts — 4/4 paths now covered (shared-viewer happy path added)"
+      F3: "FIXED — page.tsx:23 — VALID_TABS whitelist normalises invalid ?tab= to 'overview' server-side"
+      F4: "FIXED — VehicleDetailTabs.tsx — full WAI-ARIA Tabs: id + aria-controls on buttons; role=tabpanel + aria-labelledby on panel"
+      F5: "FIXED — VehicleHeader.tsx:14 — h-[200px] matches AC3 exactly"
+    advisory_status:
+      F6: "TRACKED — getTotalSpend dead code; clean up in Epic 05"
+      F7: "TRACKED — Default load URL has no ?tab=overview; no functional impact"
+      F8: "TRACKED — Duplicate mapVehicleRow logic; refactor when convenient"
+
+final_security:
+  auth_gate_page: PASS
+  auth_gate_api: PASS
+  access_control_logic: PASS
+  delete_ui_exposure: PASS — F1 fixed; Delete and Manage Viewers both owner-gated
+  schema_column_correctness: PASS
+  info_leakage: PASS
+
+final_test_coverage:
+  unit_getWithAccessCheck: "4/4 paths — owner / not-found / shared-viewer-with-access / no-access"
+  unit_create: "5/5"
+  total_tests: 52
+  e2e: "2 tests skipped — follows project convention (pending auth storageState)"
+
+final_ac_coverage:
+  AC1: PASS
+  AC2: PASS
+  AC3: PASS
+  AC4: PASS
+  AC5: PASS
+  AC6: PASS
+  AC7: PASS
+  AC8: PASS
+  AC9: PASS
+  AC10: PASS
+  AC11: PASS
+  AC12: PASS
+  AC13: PASS

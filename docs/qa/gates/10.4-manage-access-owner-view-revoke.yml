@@ -1,0 +1,122 @@
+gate:
+  story: "10.4"
+  slug: manage-access-owner-view-revoke
+  epic: "10 — Vehicle Sharing"
+  reviewed_by: Quinn (QA Agent)
+  reviewed_at: "2026-04-25"
+  model: claude-sonnet-4-6
+
+decision: PASS
+
+summary: >
+  Re-reviewed 2026-04-25 after dev applied all fixes. All 5 defects (D1–D5) resolved and
+  verified in source. 11/11 ACs now PASS. listPendingInvites correctly filters expired-pending
+  invites via gte(expiresAt, now()). Notification failure in revoke route is now non-fatal
+  (fire-and-forget). cancelInvite has status guard. Route param naming documented. 26/26 tests
+  pass. pnpm typecheck and pnpm lint clean. Story approved for merge.
+
+  [Initial review 2026-04-25: CONCERNS — 10/11 ACs met, 2 must-fix defects identified.]
+
+acceptance_criteria:
+  - id: AC1
+    description: "Sharing page at /garage/[id]/sharing extended from Story 10.1"
+    status: PASS
+    notes: "Server component exists, passes vehicle/access/pendingInvites props to SharingPageView."
+  - id: AC2
+    description: "Active access entries: name (or email), access level, date granted"
+    status: PASS
+    notes: "Renders userName ?? userEmail ?? 'Unknown', access level label ('View access'), grantedAt formatted."
+  - id: AC3
+    description: "Pending invites: email + expiry countdown"
+    status: PASS
+    notes: >
+      UI rendering correct ('Expires in N days'/'Expires today'). listPendingInvites now filters
+      by status='pending' AND gte(expiresAt, now()) — expired-but-unswept invites correctly excluded.
+  - id: AC4
+    description: "Revoke access: ConfirmModal → DELETE /api/invites/access/[accessId]"
+    status: PASS
+    notes: "ConfirmModal with isDestructive=true, isLoading prop correctly wired. DELETE endpoint calls revokeAccess."
+  - id: AC5
+    description: "Revocation notification: type='access_revoked', correct title/body/action_url"
+    status: PASS
+    notes: >
+      All fields match spec. Notification is sent after successful revokeAccess. Note: notification
+      failure currently propagates 500 to client (see D2).
+  - id: AC6
+    description: "Cancel invite: DELETE /api/invites/[inviteId], no email sent"
+    status: PASS
+    notes: "cancelInvite only deletes the VehicleInvite record. No email call present."
+  - id: AC7
+    description: "'Invite another person' CTA at bottom"
+    status: PASS
+    notes: "Dashed-border button at page bottom scrolls to and focuses the email input via ref."
+  - id: AC8
+    description: "GET /api/vehicles/[id]/access returns access list + pending invites"
+    status: PASS
+    notes: "Returns { access: VehicleAccessRecord[], pendingInvites: VehicleInviteRecord[] }. Ownership enforced."
+  - id: AC9
+    description: "vehicleInviteService.listAccess"
+    status: PASS
+    notes: "Pre-existing implementation with ownership check. Returns VehicleAccessRecord[]."
+  - id: AC10
+    description: "vehicleInviteService.revokeAccess — ownership check + delete"
+    status: PASS
+    notes: "Single inner-join query fetches access record with vehicle for ownership validation. Correct return shape."
+  - id: AC11
+    description: "pnpm typecheck and pnpm lint pass"
+    status: PASS
+    notes: "Both clean. Lint warnings are pre-existing in unrelated files."
+
+defects:
+  - id: D1
+    severity: MEDIUM
+    status: RESOLVED
+    title: "listPendingInvites missing expiresAt filter — expired invites shown as 'Expires today'"
+    resolution: >
+      Added gte import and gte(vehicleInvites.expiresAt, new Date()) filter to listPendingInvites
+      where clause. Expired-but-unswept pending invites now excluded from UI.
+    files:
+      - src/services/vehicleInviteService.ts
+
+  - id: D2
+    severity: LOW
+    status: RESOLVED
+    title: "Notification failure after revokeAccess returns 500 — access deleted but UI shows error"
+    resolution: >
+      notificationService.create() changed to fire-and-forget with .catch(() => {}).
+      Response returned immediately after revokeAccess() — notification failure no longer
+      propagates to client.
+    files:
+      - src/app/api/invites/access/[accessId]/route.ts
+
+informational:
+  - >
+    D3 (advisory, RESOLVED): cancelInvite now throws BadRequestError for non-pending invites.
+    Test added: "throws BadRequestError when invite is not pending (e.g. already accepted)".
+  - >
+    D4 (advisory, RESOLVED): [token]/route.ts has explanatory comment clarifying params.token
+    is the invite UUID id, not the token string.
+  - >
+    D5 (advisory, RESOLVED): All 11 AC checkboxes marked [x] in story file.
+  - >
+    D1 unit test limitation: expiry filter lives in Drizzle query clause; unit test with mocked
+    DB cannot assert SQL predicate correctness. Integration/E2E test recommended if filter
+    regression becomes a concern.
+  - >
+    Route hit count on page load: server component calls getByIdOwnerOnly via both listAccess
+    and listPendingInvites separately — 2 parallel ownership checks per page load. Minor
+    inefficiency, acceptable for MVP.
+
+risks:
+  - area: "Expired invite display"
+    level: MEDIUM
+    note: "Until D1 is fixed, expired-pending invites show in UI. Owner can cancel them (harmless) but sees incorrect expiry label."
+  - area: "Ownership enforcement"
+    level: LOW
+    note: "revokeAccess uses inner join to validate ownership atomically. No IDOR risk."
+  - area: "Double-revoke"
+    level: LOW
+    note: "Revoking an already-revoked accessId returns NotFoundError → 404 via handleApiError. Client receives appropriate error."
+  - area: "Notification reliability"
+    level: LOW
+    note: "Until D2 is fixed, notification failure creates false-500 UX. Core revocation is unaffected."

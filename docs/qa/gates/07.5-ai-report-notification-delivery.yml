@@ -1,0 +1,162 @@
+story: "7.5 — AI Report Notification Delivery"
+epic: "07 — Reports & Analytics"
+reviewer: "Quinn (QA Agent, claude-sonnet-4-6)"
+reviewed_at: "2026-04-13"
+decision: PASS
+
+history:
+  - date: "2026-04-13"
+    decision: CONCERNS
+    reason: "R1: notification failure can corrupt report status; R2: pushNotificationsEnabled not checked (AC4 unmet)"
+  - date: "2026-04-13"
+    decision: PASS
+    reason: "R1 and R2 resolved. 319 tests pass, typecheck and lint clean."
+
+summary: >
+  All required fixes applied. R1: deliverAIReportNotifications is now fully non-fatal —
+  called with .catch() at the runGeneration call site so no notification error can affect
+  report status. R2: userService.getById consolidated to single call; pushNotificationsEnabled
+  checked before sending push (AC4 satisfied). 319 tests pass including two new required
+  tests (R1: status remains ready when create throws; R2: push skipped when preference=false).
+  Email (AC3) remains waived — architectural gap pending Story 8.3.
+
+required_fixes:
+  - id: R1
+    status: RESOLVED
+    severity: medium
+    description: >
+      deliverAIReportNotifications() is awaited inside the main try/catch of runGeneration()
+      (aiReportService.ts:109). If notificationService.create() throws (DB down, connection
+      error), the catch block fires and writes status='failed' — AFTER status='ready' was
+      already committed. The report content was successfully generated; only the notification
+      failed. This produces an inconsistent state: report has content but status='failed'.
+    location: "src/services/aiReportService.ts:109"
+    recommended_fix: >
+      Move the deliverAIReportNotifications call outside (after) the try/catch block,
+      adding a return statement in the catch block to prevent fall-through. Example:
+        try {
+          ...
+          await db.update(aiReports).set({ status: "ready", ... }).where(...);
+        } catch (err) {
+          logger.error(...);
+          await db.update(aiReports).set({ status: "failed" }).where(...);
+          return;
+        }
+        // Non-fatal — report stays ready regardless of delivery outcome
+        await deliverAIReportNotifications(userId, reportId, periodLabel);
+    test_required: >
+      Add test: "report status remains ready when notificationService.create throws"
+      Simulate notificationService.create rejecting; assert db.update was called with
+      status='ready' (not 'failed') and that runGeneration does not throw.
+
+  - id: R2
+    status: RESOLVED
+    severity: medium
+    description: >
+      AC4 states push notifications should only be sent "if user has push notifications
+      enabled". The users table has a pushNotificationsEnabled boolean column
+      (schema.ts:34), but deliverAIReportNotifications() never reads it.
+      All users with subscriptions receive push regardless of their preference.
+    location: "src/services/aiReportService.ts:154-172"
+    recommended_fix: >
+      Fetch the user's pushNotificationsEnabled flag (it's already loaded via
+      userService.getById in the email block) and guard the push block:
+        const user = await userService.getById(userId);
+        if (user.pushNotificationsEnabled) {
+          const subscriptions = await pushService.getSubscriptionsForUser(userId);
+          ...
+        }
+      Consolidate the userService.getById call (currently in email block) to be shared.
+    test_required: >
+      Add test: "does not send push when pushNotificationsEnabled is false"
+      Mock userService.getById to return { pushNotificationsEnabled: false };
+      assert mockGetSubscriptionsForUser was NOT called.
+
+waived:
+  - id: W1
+    severity: medium
+    description: >
+      AC3 (email to user) is architecturally unmet — the users table has no email column
+      (app uses Google OAuth; email is not persisted to DB). The implementation guards
+      correctly with (user as Record<string, unknown>).email but this always returns
+      undefined. sendEmail() is never called for any user in the current schema.
+    rationale: >
+      This is a known dependency gap documented in dev completion notes. Resolving it
+      requires a schema migration to add an email column (or storing email at OAuth
+      sign-in), which is Story 8.3 scope. Waiving for this story; a follow-up ticket
+      should track: add email to users table → wire into deliverAIReportNotifications.
+    followup_required: "Track as tech-debt: add email column to users, wire email send in Story 8.3"
+
+non_blocking:
+  - id: NB1
+    severity: low
+    status: OPEN
+    description: >
+      Missing positive email test. Task 5.4 was specified as "email mock called with
+      correct subject and recipient" but the implemented test only covers the failure
+      path ("does not throw when email delivery fails"). There is no assertion that
+      sendEmail() is called with the correct subject/to address when a user has an
+      email available.
+    recommendation: >
+      After W1 (email) is resolved, add test:
+      "sends email with correct subject and recipient when user has email address"
+      Mock userService.getById to return user with email field populated;
+      assert sendEmail called with ("user@example.com", "Your MotoYaar AI report is ready", ...).
+
+  - id: NB2
+    severity: low
+    status: OPEN
+    description: >
+      Per-subscription non-410 push errors are silently dropped with no logging.
+      The .catch() inside the subscriptions.map() only handles 410; all other error
+      codes are consumed without trace. The outer try/catch only covers
+      getSubscriptionsForUser() failures, not per-subscription send failures.
+    recommendation: >
+      In the per-subscription .catch(), add an else branch that logs at warn level:
+        .catch(async err => {
+          if (err.statusCode === 410) {
+            await pushService.deleteSubscription(sub.endpoint);
+          } else {
+            logger.warn({ err, endpoint: sub.endpoint, userId }, "Push send failed");
+          }
+        })
+
+  - id: NB3
+    severity: very-low
+    status: OPEN
+    description: >
+      notificationService.create() accepts type: string but Notification interface
+      defines type as a union of specific string literals. A typo in the type arg
+      would be caught at runtime (DB stores it fine) but not at compile time.
+    recommendation: >
+      Consider narrowing the type parameter to the Notification union type, or
+      exporting a NotificationType = Notification["type"] alias for reuse.
+
+ac_results:
+  - ac: 1
+    result: PASS
+    note: "In-app notification created after status='ready' write — pending R1 fix for robustness"
+  - ac: 2
+    result: PASS
+    note: "type, title, body, action_url all match spec exactly"
+  - ac: 3
+    result: WAIVED
+    note: "W1 — users table has no email column; email never fires in current schema"
+  - ac: 4
+    result: PASS
+    note: "R2 resolved — pushNotificationsEnabled checked; push guarded by user preference"
+  - ac: 5
+    result: PASS
+    note: "deliverAIReportNotifications is private helper in aiReportService.ts, called after generateReport"
+  - ac: 6
+    result: PASS
+    note: "Positional signature matches spec exactly"
+  - ac: 7
+    result: PASS
+    note: "410 handled, stale sub deleted, Promise.allSettled used, tested"
+  - ac: 8
+    result: PASS
+    note: "R1 resolved — deliverAIReportNotifications called with .catch(); report status never affected by notification errors"
+  - ac: 9
+    result: PASS
+    note: "typecheck and lint confirmed clean"

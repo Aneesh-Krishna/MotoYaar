@@ -1,0 +1,103 @@
+story: 14.2
+title: Per-Fill-Up Fuel Efficiency Tracking
+epic: 14 - Growth & Engagement
+reviewer: Quinn (QA Agent)
+review_date: 2026-05-06
+model: claude-sonnet-4-6
+
+decision: PASS
+
+rereviewed_date: 2026-05-06
+
+summary: >
+  All R1–R4 fixes verified in code. R1: calculateKmpl now accepts excludeId and
+  filters ne(expenses.id, excludeId) — self-reference on update eliminated.
+  R2: orderBy uses [desc(date), desc(createdAt)] — same-day determinism fixed.
+  R3: updatedReason !== "Fuel" branch explicitly sets newKmpl = null — stale
+  kmpl cleared on reason change. R4: Two ExpenseRow tests added covering kmpl
+  present and absent. Two additional service tests cover update paths.
+  Suite 601/601. All 9 ACs pass. Story cleared for merge.
+
+required_fixes:
+  - id: R1
+    severity: medium
+    file: src/services/expenseService.ts
+    description: >
+      `calculateKmpl` on update does not exclude the expense being updated.
+      If the edited expense is the most recent, `findFirst` returns it as the
+      "previous" record, yielding 0 km delta → null kmpl silently.
+    fix: >
+      Pass an optional `excludeId` param to `calculateKmpl` and add
+      `ne(expenses.id, excludeId)` to the where clause. Call it from `update`
+      with the current `expenseId`.
+
+  - id: R2
+    severity: low
+    file: src/services/expenseService.ts
+    description: >
+      `calculateKmpl` orders only by `desc(expenses.date)`. Two fill-ups on the
+      same calendar day produce a non-deterministic "previous" record.
+    fix: >
+      Change orderBy to `[desc(expenses.date), desc(expenses.createdAt)]`.
+
+  - id: R3
+    severity: low
+    file: src/services/expenseService.ts
+    description: >
+      When `update` changes reason away from Fuel, the old `kmpl` value is not
+      cleared — DB inconsistency (non-Fuel expense with a kmpl value).
+    fix: >
+      In the `update` SET clause, explicitly set `kmpl: null` when
+      `updatedReason !== "Fuel"`.
+
+  - id: R4
+    severity: low
+    file: src/components/expenses/__tests__/ExpenseRow.test.tsx
+    description: >
+      No test covers the new kmpl display (AC4). The `ExpenseRow` renders
+      `expense.kmpl` but this branch has zero test coverage.
+    fix: >
+      Add two tests: (1) fuel expense with `kmpl: 28.5` → renders "28.5 kmpl",
+      (2) expense with `kmpl: undefined` → no kmpl text rendered.
+
+nice_to_have:
+  - id: N1
+    severity: low
+    file: src/components/expenses/ExpenseForm.tsx
+    description: >
+      `valueAsNumber: true` on litresFilled/odometerKm produces NaN when the
+      field is cleared. Zod rejects NaN with a generic type error rather than
+      gracefully treating it as undefined.
+    fix: >
+      Add `z.preprocess` to coerce NaN → undefined on both fields, or use a
+      `setValueAs` transformer in react-hook-form register options.
+
+ac_coverage:
+  - ac: 1
+    status: pass
+  - ac: 2
+    status: pass
+  - ac: 3
+    status: pass
+  - ac: 4
+    status: pass
+    note: kmpl rendering covered by two new ExpenseRow tests (R4 resolved)
+  - ac: 5
+    status: pass
+  - ac: 6
+    status: pass
+  - ac: 7
+    status: pass
+  - ac: 8
+    status: pass
+  - ac: 9
+    status: pass
+
+test_summary:
+  total_new_tests: 10
+  files_added:
+    - src/services/__tests__/expenseService.fuelEfficiency.test.ts
+  files_modified:
+    - src/components/expenses/__tests__/ExpenseRow.test.tsx
+  suite_result: 601/601 pass
+  gaps: []

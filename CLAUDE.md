@@ -27,6 +27,12 @@ Run checks selectively based on what changed. Do not report a task as done until
 
 If any step fails, fix the issue before proceeding. Do not skip steps or report success while a check is failing.
 
-## Removed Features — Do Not Implement
+## Maps & Live Tracking — Reinstated
 
-Live trips and live maps have been permanently removed from this project (stories 13.x were deleted). Any future story or task that involves live trip tracking, real-time location, live maps, or anything map/GPS-related must be **skipped and flagged to the user** — do not implement.
+Live trips and live maps were previously removed (stories 13.x deleted) but were formally reinstated on 2026-05-17 via `docs/prd-maps-tracking-offline.md`. The following features are now approved for implementation:
+
+- Embedded Google Maps (navigation, search, traffic, nearby POIs)
+- Group Rides Live Tracking (Supabase Realtime Broadcast)
+- Offline Route Navigation (OPFS + Service Worker + OSRM)
+
+Implement these features according to the PRD. All other removed features (Street View, indoor maps, Waze-style incident reporting, P2P WebRTC voice/video) remain out of scope — see Section 18 of the PRD.

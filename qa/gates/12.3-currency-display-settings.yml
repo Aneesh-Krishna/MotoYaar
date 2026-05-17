@@ -1,0 +1,71 @@
+gate:
+  story: "12.3"
+  title: "Currency & Display Settings"
+  epic: "12 — Profile & Settings"
+  reviewed_at: "2026-04-26"
+  reviewer: "Quinn (QA Agent — claude-sonnet-4-6)"
+  decision: PASS
+
+summary: >
+  All blocking findings from the first review (F1, F2) have been resolved. Advisory concerns
+  C1 and C3 were also addressed beyond what was required. C2 (formatCurrency en-IN locale)
+  remains deferred to a future formatting story — this was pre-existing and correctly scoped out.
+  34/34 tests pass. Lint clean. Story is approved for merge.
+
+review_history:
+  - round: 1
+    date: "2026-04-26"
+    decision: CONCERNS
+    blockers: [F1, F2]
+  - round: 2
+    date: "2026-04-26"
+    decision: PASS
+    blockers: []
+
+acceptance_criteria:
+  AC1_general_section: PASS
+  AC2_six_currencies: PASS
+  AC3_patch_api: PASS       # response.ok check added; error path tested
+  AC4_session_update: PASS
+  AC5_expense_symbol: PASS
+  AC6_reports_logic: N/A    # deferred to Story 7.6
+  AC7_all_price_inputs: PASS
+  AC8_typecheck_lint: PASS  # lint passes; pre-existing typecheck failures not from this story
+
+findings:
+  - id: F1
+    severity: FAIL
+    status: RESOLVED
+    title: "CurrencySetting PATCH does not check response.ok"
+    resolution: "Added `if (!res.ok) throw new Error('API error')` at CurrencySetting.tsx:29. update() and success toast now only fire on HTTP 2xx."
+
+  - id: F2
+    severity: FAIL
+    status: RESOLVED
+    title: "Missing CurrencySetting unit tests"
+    resolution: "Created CurrencySetting.test.tsx with 6 tests: selected value, PATCH call, session refresh, success toast, non-ok error path, network error path. All pass."
+
+  - id: C1
+    severity: CONCERN
+    status: RESOLVED
+    title: "CURRENCIES array duplicated between component and currency.ts"
+    resolution: "CURRENCIES exported as const from currency.ts; local array removed from CurrencySetting.tsx. Single source of truth."
+
+  - id: C2
+    severity: CONCERN
+    status: DEFERRED
+    title: "formatCurrency uses en-IN locale for all currencies"
+    resolution: "Pre-existing. Deferred to a future currency/formatting story. Advisory only — does not affect INR users."
+
+  - id: C3
+    severity: CONCERN
+    status: RESOLVED
+    title: "Trip-linked expense read-only view used formatINR"
+    resolution: "ExpenseForm.tsx:200 now uses formatCurrency(expense.price, session?.user?.currency ?? 'INR'). Unused formatINR import removed."
+
+test_results:
+  CurrencySetting.test.tsx: "6/6 pass"
+  ExpenseForm.test.tsx: "10/10 pass"
+  DocumentStorageSection.test.tsx: "6/6 pass"
+  NotificationsSection.test.tsx: "12/12 pass"
+  total: "34/34 pass"

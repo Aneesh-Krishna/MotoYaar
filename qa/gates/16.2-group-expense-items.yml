@@ -1,0 +1,71 @@
+gate: PASS
+story: "16.2 — Log Group Expense with Selective Splitting"
+epic: "16 — Groups & Club Features"
+reviewer: Quinn (QA Agent)
+round: 2
+date: 2026-05-06
+overall: APPROVED
+
+summary: >
+  All 10 ACs fully implemented. All Round 1 concerns resolved by dev.
+  19/19 item service tests pass. 669/669 full suite tests pass.
+  typecheck and lint clean. Story approved for merge.
+
+rounds:
+  - round: 1
+    date: 2026-05-06
+    gate: CONCERNS
+    findings:
+      - id: C1
+        severity: DATA_INTEGRITY
+        status: FIXED
+        description: "includedUserIds not validated against session membership"
+        resolution: >
+          addItem and updateItem now fetch all session members via join query
+          and validate every includedUserIds entry against memberMap.
+          BadRequestError thrown on any non-member UUID.
+
+      - id: C2
+        severity: ADVISORY
+        status: FIXED
+        description: "JS float division for perPerson produced irrational values"
+        resolution: >
+          toGroupExpenseItem now applies Math.round(rawPerPerson * 100) / 100.
+          100/3 = 33.33 (not 33.333...).
+
+      - id: MINOR_1
+        severity: MINOR
+        status: FIXED
+        description: "Unused Pencil import in ExpenseItemRow.tsx"
+
+      - id: MINOR_2
+        severity: MINOR
+        status: DEFERRED
+        description: "window.confirm() for delete — inconsistent with sheet UX"
+        rationale: "Acceptable for MVP; UX polish can follow."
+
+      - id: MINOR_3
+        severity: MINOR
+        status: FIXED
+        description: "Extra DB round-trip in addItem to fetch paidByUser name"
+        resolution: >
+          paidByName now resolved from memberMap already fetched for validation.
+          Note: updateItem description-only path retains one users.findFirst —
+          acceptable as it only fires when paidBy/includedUserIds are unchanged.
+
+  - round: 2
+    date: 2026-05-06
+    gate: PASS
+    verification:
+      requirements_traceability: "10/10 PASS"
+      security_authorization: "8/8 PASS — C1 resolved"
+      test_coverage: "19/19 PASS — perPerson rounding, C1 validation, phantom ID tests added"
+      code_quality: "PASS — C2 fixed, MINOR_1 fixed, MINOR_3 fast-path fixed"
+      full_regression: "669/669 tests pass"
+      typecheck: PASS
+      lint: PASS
+
+verdict: >
+  PASS — Story 16.2 approved. All material concerns resolved.
+  MINOR_2 (window.confirm) deferred as accepted MVP behaviour.
+  No downstream blockers remain for Epic 16 settlement features.

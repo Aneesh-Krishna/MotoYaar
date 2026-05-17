@@ -1,0 +1,141 @@
+story: "4.1 — Upload Document with AI Parsing"
+epic: "04 — Document Management"
+reviewed_by: "Quinn (QA Agent)"
+reviewed_date: "2026-03-19"
+model: "claude-sonnet-4-6"
+
+decision: PASS
+
+summary: >
+  Re-review following QA fix application. All must-fix items (MF-1 security,
+  MF-2 file input bug) confirmed resolved. All should-fix items either
+  resolved (SF-1 through SF-6) or legitimately deferred (SF-3 pending Story
+  4.2, SF-7 low priority). 98/98 tests passing (up from 90), typecheck clean.
+  Story is ready to ship.
+
+# ─── Original must-fix items — all resolved ───────────────────────────────────
+
+resolved_must_fix:
+  - id: MF-1
+    severity: SECURITY
+    title: "tempR2Key not validated against owner's namespace"
+    resolution: >
+      Fixed in src/services/documentService.ts:63.
+      Prefix check throws ForbiddenError before any R2 operation.
+      Security test added in documentService.create.test.ts (2 cases).
+    status: RESOLVED
+
+  - id: MF-2
+    severity: BUG
+    title: "File input value not cleared on error return"
+    resolution: >
+      Fixed in src/components/documents/DocumentUpload.tsx.
+      fileInputRef.current.value = "" applied in 4 error paths:
+      invalid file type (L52), file too large (L57), no doc type selected
+      (L63), and parse API catch block (L111).
+    status: RESOLVED
+
+# ─── Original should-fix items ────────────────────────────────────────────────
+
+resolved_should_fix:
+  - id: SF-1
+    title: "AC4 — Screen 4 (save confirmation) missing"
+    resolution: >
+      Screen 4 added to DocumentUpload.tsx (L215-235). Displays CheckCircle,
+      "Document saved!" heading, expiry date summary, and Done button that
+      calls onSuccess(). handleSave now sets screen to "saved" instead of
+      calling onSuccess() directly.
+    status: RESOLVED
+
+  - id: SF-2
+    title: "AC1 — Add Vehicle Step 5 not wired"
+    resolution: >
+      Step5 component (L348-368) added to AddVehicleWizard with informative
+      message: "Save your vehicle first, then add your RC, Insurance, and PUC.
+      You'll land on the Documents tab right after saving."
+      handleSave redirects to /garage/{id}?tab=documents (L547).
+      Note: DocumentUpload is not embedded in the wizard — this is the
+      correct approach since vehicleId is not known until after save.
+      AC1 Add Vehicle Step 5 is now MET (with appropriate UX trade-off).
+    status: RESOLVED
+
+  - id: SF-3
+    title: "AC5 — onManualEntry not passed in VehicleDetailTabs"
+    resolution: >
+      Intentionally deferred. Prop exists in DocumentUpload but wiring
+      requires Story 4.2 manual date picker. Graceful fallback (empty
+      confirm screen) is acceptable until 4.2 is built.
+    status: DEFERRED
+    deferred_to: "Story 4.2"
+
+  - id: SF-4
+    title: "capture=environment forces camera on iOS"
+    resolution: >
+      Removed from src/components/documents/DocumentUpload.tsx (L188).
+      File input now allows both camera and gallery on all platforms.
+    status: RESOLVED
+
+  - id: SF-5
+    title: "documentService.create() has zero unit test coverage"
+    resolution: >
+      src/services/__tests__/documentService.create.test.ts created with
+      7 tests covering: parse_only delete, R2 delete failure non-blocking,
+      full_storage copy+delete, ForbiddenError on invalid key, valid key
+      passes, no-key path, user-not-found defaults.
+    status: RESOLVED
+
+  - id: SF-6
+    title: "computeDocumentStatus with invalid date string returns 'valid'"
+    resolution: >
+      Fixed in documentService.ts:22 — isNaN(expiry.getTime()) guard returns
+      "incomplete" before arithmetic. Two test cases added to
+      documentService.test.ts covering "not-a-date" and "2027-99-99".
+    status: RESOLVED
+
+  - id: SF-7
+    title: "No fetch timeout on parse API call"
+    resolution: >
+      Not addressed. Accepted as low-priority technical debt.
+      Vercel's 60s function timeout provides an implicit upper bound.
+      A future story can add AbortController + setTimeout if needed.
+    status: OPEN
+    priority: LOW
+
+# ─── AC traceability (updated) ────────────────────────────────────────────────
+
+ac_traceability:
+  AC1_vehicle_detail: PASS
+  AC1_add_vehicle_step5: PASS        # Step5 + ?tab=documents redirect
+  AC2_doc_types: PASS
+  AC3_file_validation: PASS
+  AC4_four_screens: PASS             # Screen 4 (saved) now implemented
+  AC5_no_date_manual: PARTIAL        # Deferred to Story 4.2
+  AC6_parse_route: PASS
+  AC7_save_route: PASS
+  AC8_storage_preference: PASS
+  AC9_record_fields: PASS
+  AC10_pdf_client_side: PASS
+  AC11_bottom_sheet: PASS
+  AC12_document_service: PASS
+  AC13_typecheck_lint: PASS
+
+# ─── Test results (updated) ───────────────────────────────────────────────────
+
+test_results:
+  total_tests: 98
+  passing: 98
+  failing: 0
+  typecheck: PASS
+  lint: PASS
+  tests_added_this_cycle: 8      # 7 (documentService.create) + 1 invalid date case
+  coverage_gaps:
+    - parse API route              # deferred — integration tested manually (10.3/10.4)
+    - save API route               # deferred — integration tested manually
+    - DocumentUpload component     # deferred — browser/E2E per stories 10.3/10.4
+    - pdfFirstPageToBlob           # deferred — browser canvas mock complexity
+
+deferred:
+  - "Component tests for DocumentUpload (manual E2E per 10.3/10.4)"
+  - "pdfFirstPageToBlob unit tests (browser-only, needs canvas mock setup)"
+  - "SF-3: onManualEntry wiring (Story 4.2)"
+  - "SF-7: fetch timeout on parse call"

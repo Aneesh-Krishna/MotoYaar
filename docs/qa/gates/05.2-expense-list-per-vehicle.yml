@@ -1,0 +1,75 @@
+gate:
+  story: "5.2 — Expense List per Vehicle"
+  epic: "05 — Expense Tracking"
+  reviewed_by: "Quinn (QA Agent)"
+  model: "claude-sonnet-4-6"
+  initial_review: "2026-03-21"
+  final_review: "2026-03-21"
+  decision: PASS
+
+ac_results:
+  AC1_sorted_date_desc: PASS
+  AC2_expense_row_component: PASS
+  AC3_row_fields_format: PASS
+  AC4_tap_stub: PASS
+  AC5_add_expense_cta_visible: PASS
+  AC6_see_spends_link: PASS
+  AC7_get_api_route: PASS
+  AC8_list_by_vehicle_access_check: PASS
+  AC9_empty_state: PASS  # heading + subtext split; full text renders correctly
+  AC10_typecheck_lint: PASS
+
+pass_rate: "10/10 AC items pass"
+
+test_results:
+  total_tests: 173
+  passed: 173
+  failed: 0
+  new_tests_added: 6
+  files:
+    - "src/components/expenses/__tests__/ExpenseRow.test.tsx"
+    - "src/services/__tests__/expenseService.listByVehicle.test.ts"
+
+findings:
+  - id: F1
+    severity: BLOCKING
+    summary: "Required unit tests not written"
+    detail: |
+      Story Testing Requirements section specifies 6 automated tests:
+        - ExpenseRow: renders price in Indian format, reason badge color,
+          receipt icon visibility, onTap called with id
+        - expenseService.listByVehicle: sorted DESC, throws ForbiddenError for unauthorized
+      Neither test file exists. Tasks 7.3-7.5 reflect manual verification only.
+    files_needed:
+      - "src/components/expenses/__tests__/ExpenseRow.test.tsx"
+      - "src/services/__tests__/expenseService.listByVehicle.test.ts"
+    status: RESOLVED
+    resolution: "6 tests written and passing (ExpenseRow ×4, expenseService.listByVehicle ×2)"
+
+  - id: F2
+    severity: MINOR
+    summary: "whereText maxLength deferred from Story 5.1 (gate F4) not addressed"
+    status: DEFERRED
+    resolution: "Defer to Story 5.3"
+
+  - id: F3
+    severity: INFORMATIONAL
+    summary: "vehicleService imported in route.ts but only used by POST handler"
+    status: ACCEPTED
+
+  - id: F4
+    severity: INFORMATIONAL
+    summary: "new Date(date-only string) parses as UTC midnight — safe for IN locale"
+    status: ACCEPTED
+
+security: PASS
+typecheck: PASS
+lint: PASS
+
+blocking_issues: []
+
+non_blocking_issues:
+  - "F2: whereText maxLength (deferred to 5.3)"
+
+deferred:
+  - "F2: whereText maxLength validation"

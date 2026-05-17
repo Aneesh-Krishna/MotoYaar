@@ -1,0 +1,51 @@
+story: 16.1
+title: Group Expense Session (Create & Join)
+epic: 16
+date: 2026-05-06
+reviewer: Quinn (QA Agent)
+model: claude-sonnet-4-6
+
+decision: PASS
+
+summary: >
+  All concerns and test gaps from the initial CONCERNS review have been fully
+  resolved. Implementation is functionally complete, all guards are in place,
+  and test coverage is comprehensive. 26 service tests pass; full regression
+  (650 tests) clean. Typecheck and lint clean.
+
+resolved_concerns:
+  - C1: Dead useEffect import removed from new/page.tsx
+  - C2: Duplicate NotFoundError import merged in join/[code]/route.ts
+  - C3: Self-invite guard added to inviteMember() — BadRequestError("You cannot invite yourself")
+  - C4: Un-archive guard added to update() — BadRequestError("Cannot reactivate an archived session")
+
+resolved_test_gaps:
+  - T1: Creator member insert assertion added to create tests
+  - T2: NotFoundError test added for unknown invitee in inviteMember
+  - T3: BadRequestError test added for archived session in removeMember
+  - T4: Full getById coverage — happy path, ForbiddenError, NotFoundError (3 tests)
+  - T5: Full update coverage — happy path, ForbiddenError, NotFoundError, un-archive guard (4 tests)
+
+notes:
+  - beforeEach switched from vi.clearAllMocks() to vi.resetAllMocks() to prevent
+    mock implementation state leakage between tests — correct fix
+  - Minor: removeMember "throws NotFoundError if target is not a member" test
+    actually exercises the session-not-found branch rather than the member-not-found
+    branch, but correctly asserts NotFoundError. Acceptable for this scope.
+
+deferred_acceptable:
+  - AC 3 username autocomplete UI — API complete; deferred pending user-search endpoint
+  - AC 8 balance-check on member removal — stub acceptable; wire up in story 16.2
+
+passing:
+  - All 7 API routes implemented and auth-gated
+  - DB schema and migration correct
+  - Invite code generation with uniqueness retry
+  - Creator auto-added as first member
+  - Trip-link title inheritance working and tested
+  - Archived sessions block invite/join/remove/reactivate
+  - Self-invite guard in place
+  - Notification sent on invite with correct actionUrl
+  - Join-by-code idempotent
+  - Typecheck clean, lint clean
+  - 26/26 service tests passing, 650/650 full regression passing

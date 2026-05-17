@@ -1,0 +1,145 @@
+gate:
+  story: "10.2"
+  slug: accept-invite-existing-user
+  epic: "10"
+  date: "2026-04-25"
+  reviewer: Quinn (QA Agent)
+  decision: PASS
+  previous_decision: "CONCERNS (Review 1, 2026-04-25)"
+
+summary: >
+  Re-review 2 (2026-04-25): Both OPEN concerns from Review 1 resolved and verified.
+  C1 — email-match guard added to acceptInvite (lines 126-129); case-insensitive comparison
+  against invite.inviteeEmail; ForbiddenError thrown for mismatch or missing email; 4 new
+  tests pass. C2 — GoogleSignInButton component extracted in login page; reads inviteToken
+  from useSearchParams(); callbackUrl set to /invites/[token] when present; wrapped in
+  Suspense. All 11 ACs remain PASS. 18/18 tests pass. typecheck and lint clean.
+  Gate upgraded to PASS.
+
+acceptance_criteria:
+  - id: AC1
+    description: "Route src/app/invites/[token]/page.tsx — outside (app) group"
+    result: PASS
+    evidence: "File created at src/app/invites/[token]/page.tsx; sits outside the (app) group and is publicly accessible"
+
+  - id: AC2
+    description: "If logged in and token valid: resolve invite → create VehicleAccess → redirect to vehicle detail"
+    result: PASS
+    evidence: "acceptInvite inserts vehicleAccess record with onConflictDoNothing, marks invite accepted, page redirects to /garage/{vehicleId}"
+
+  - id: AC3
+    description: "If token expired: show expiry message"
+    result: PASS
+    evidence: "Exact message: 'This invite has expired. Ask the vehicle owner to send a new one.' — matches ConflictError thrown in acceptInvite and passed through InviteErrorView"
+
+  - id: AC4
+    description: "If token already accepted: show 'already accepted' message"
+    result: PASS
+    evidence: "ConflictError('This invite has already been accepted.') thrown; InviteErrorView surfaces error.message"
+
+  - id: AC5
+    description: "If token not found: show generic 'Invalid invite link.'"
+    result: PASS
+    evidence: "NotFoundError → InviteErrorView shows 'Invalid invite link. This invite does not exist.' — slightly more specific than spec but acceptable"
+
+  - id: AC6
+    description: "Accepted vehicle appears in Garage under 'Shared with me' section"
+    result: PASS
+    evidence: "garage/page.tsx renders 'Shared with me' section when shared.length > 0; vehicleService.listByUser innerJoins vehicle_access"
+
+  - id: AC7
+    description: "View-only mode: all tabs visible, no add/edit/delete actions when isOwner=false"
+    result: PASS
+    evidence: "isOwner derived in vehicle detail page, propagated to VehicleDetailTabs, DocumentsTab (onEdit/onDelete optional), ExpensesTab (onTap optional), VehicleKebabMenu (Edit gated)"
+
+  - id: AC8
+    description: "POST /api/invites/[token]/accept (or GET redirect pattern)"
+    result: PASS
+    evidence: "GET redirect pattern implemented via RSC page — the 'or' option from the AC"
+
+  - id: AC9
+    description: "vehicleInviteService.acceptInvite(token, userId)"
+    result: PASS
+    evidence: "Method implemented in vehicleInviteService.ts:111-137; validates token, status, expiry, inserts VehicleAccess, marks accepted"
+
+  - id: AC10
+    description: "Garage list fetches owned vehicles + vehicles from VehicleAccess records"
+    result: PASS
+    evidence: "vehicleService.listByUser runs 4 parallel queries including innerJoin on vehicle_access table"
+
+  - id: AC11
+    description: "pnpm typecheck and pnpm lint pass"
+    result: PASS
+    evidence: "Both verified by dev agent; breaking listByUser signature change propagated to all 4 callers"
+
+open_items:
+  - id: C1
+    severity: medium
+    title: "No email-match guard in acceptInvite — any authenticated user can claim invite by URL"
+    status: RESOLVED
+    detail: >
+      acceptInvite(token, userId) does not verify that the logged-in user's email matches
+      invite.inviteeEmail. Any authenticated MotoYaar user who obtains the token URL (e.g. via
+      forwarded email, link preview, or browser history) can claim the invite regardless of
+      whether they are the intended recipient. Risk is limited to link exposure scenarios but
+      is worth closing with an email-match check before the feature reaches broad use.
+    recommendation: >
+      Add: if (invite.inviteeEmail !== userEmail) throw new ForbiddenError('This invite was sent to a different email address.');
+      Requires passing userEmail into acceptInvite or fetching from the users table inside the method.
+
+  - id: C2
+    severity: low
+    title: "Post-login redirect loses invite context for unauthenticated existing users"
+    status: RESOLVED
+    detail: >
+      When an existing user arrives at /invites/[token] without a session, they are redirected to
+      /login?inviteToken=[token]. The login page does not read this param or redirect back to the
+      invite URL after authentication. The user lands on the default post-login page and must
+      click the email link a second time to complete acceptance. Story does not explicitly require
+      handling this case, but it is a meaningful UX gap for users who are logged out.
+    recommendation: >
+      In the login page's post-auth redirect logic, check for inviteToken param and redirect to
+      /invites/[token] after successful authentication.
+
+  - id: C3
+    severity: info
+    title: "Garage FAB ('Add Vehicle') shown when user has only shared vehicles"
+    status: ACKNOWLEDGED
+    detail: >
+      The FAB in garage/page.tsx is rendered whenever !isEmpty (i.e. any vehicles exist).
+      A user with zero owned vehicles but one or more shared vehicles sees the floating
+      'Add Vehicle' button, which is correct behavior (they can still add their own vehicle)
+      but may be slightly unexpected. Not a bug.
+
+  - id: C4
+    severity: info
+    title: "Revoked invite status not checked in acceptInvite"
+    status: ACKNOWLEDGED
+    detail: >
+      acceptInvite only guards against status='accepted' and expiry. If a 'revoked' status
+      is added in future stories, a revoked invite could be accepted until that check is added.
+      No revoked status exists in the current schema, so this is a forward-looking note only.
+
+resolved_concerns:
+  - id: C1
+    title: "No email-match guard in acceptInvite"
+    resolution: >
+      vehicleInviteService.acceptInvite now fetches db.query.users.findFirst({ where: eq(users.id, userId) })
+      after expiry check. If user has no email or user.email.toLowerCase() !== invite.inviteeEmail,
+      throws ForbiddenError("This invite was sent to a different email address.").
+      Tests added: email mismatch → ForbiddenError, null email → ForbiddenError,
+      case-insensitive match → success, email matches → full happy path passes.
+
+  - id: C2
+    title: "Post-login redirect loses invite context"
+    resolution: >
+      Login page refactored: GoogleSignInButton component reads inviteToken from useSearchParams(),
+      builds callbackUrl as /invites/[token] when present else /. Wrapped in <Suspense fallback={null}>
+      per Next.js App Router requirement. signIn("google", { callbackUrl }) now routes user
+      back to invite acceptance page automatically after authentication.
+
+risks: []
+
+recommendations:
+  - "Add VehicleKebabMenu isOwner prop check for 'Delete' option if it is rendered for shared vehicle viewers in a future story"
+  - "Consider adding a 'Shared' badge to VehicleCard in the shared section for visual differentiation"

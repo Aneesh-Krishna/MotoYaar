@@ -1,0 +1,47 @@
+gate: PASS
+story: "16.3 — Group Balances & Settle Up"
+epic: "16 — Groups & Club Features"
+reviewer: Quinn (QA Agent)
+round: 3
+date: 2026-05-06
+overall: APPROVED
+
+summary: >
+  All findings resolved across three rounds. R2-F1 (incorrect raw-net approximation
+  in settleBalance) fixed by replacing the approximation with the full Splitwise
+  greedy simplification loop, identical to computeBalances. The R2 counter-example
+  scenario contained a narrative error (B→A simplified amount is ₹200 not ₹100 for
+  that specific net distribution), but the fix is correct and robust for all cases.
+  680/680 tests pass, typecheck and lint clean.
+
+round1_resolutions:
+  F1: FIXED    # allSettled guard now checks totalSessionSpend > 0
+  F2: PARTIAL  # validation added but approximation incorrect — see R2-F1
+  F3: WAIVED   # advisory, acceptable for current scale
+  F4: FIXED    # unused import removed
+
+round2_resolutions:
+  R2-F1: FIXED  # settleBalance now uses full Splitwise greedy loop, not raw-net approximation
+
+findings: []
+
+requirements_coverage:
+  AC1: PASS   # Balances tab/section via ?tab=balances searchParam
+  AC2: PASS   # Splitwise debt simplification in computeBalances
+  AC3: PASS   # labelBalance() personalises "You owe" / "X owes you"
+  AC4: PASS   # totalSessionSpend + perMemberShare returned and displayed
+  AC5: PASS   # canSettle() auth check; settleBalance validates with full simplification
+  AC6: PASS   # Collapsible settledOpen section in BalancesPanel
+  AC7: PASS   # allSettled = totalSessionSpend > 0 && activeBalances.length === 0
+  AC8: PASS   # router.refresh() post-mutation; server RSC recomputes
+  AC9: PASS   # typecheck and lint clean
+
+test_coverage:
+  total_suite: "680/680 pass"
+  typecheck: PASS
+  lint: PASS
+
+verdict: >
+  PASS — Story 16.3 is approved. All acceptance criteria are implemented and
+  verified. Settlement validation is correct for all group configurations
+  including multi-creditor sessions with ≥3 members.

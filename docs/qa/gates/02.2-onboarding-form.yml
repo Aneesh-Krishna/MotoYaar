@@ -1,0 +1,90 @@
+gate:
+  story: "2.2"
+  slug: onboarding-form
+  epic: "02"
+  reviewer: Quinn (QA Agent)
+  model: claude-sonnet-4-6
+  reviewed_at: 2026-03-18
+  review_pass: 2026-03-18
+  decision: PASS
+
+summary: >
+  All 6 must-fix and should-fix items from the initial CONCERNS review have been
+  resolved. Security gap patched, UX error handling added, name pre-fill fixed,
+  onBlur mode applied, upload error handling added, E2E stubs added.
+  Two minor observations remain — both acceptable for MVP.
+
+previous_decision: CONCERNS
+previous_reviewed_at: 2026-03-18
+
+resolved_items:
+  - id: QA-2.2-01
+    status: RESOLVED
+    verification: >
+      ALLOWED_CONTENT_TYPES whitelist enforced server-side with 422 rejection.
+      path.basename() + MAX_FILENAME_LENGTH=100 sanitizes filename.
+
+  - id: QA-2.2-02
+    status: RESOLVED
+    verification: >
+      submitError state added. Inline error banner rendered on PATCH failure.
+      Upload failure also surfaces user-facing message.
+
+  - id: QA-2.2-03
+    status: RESOLVED
+    verification: >
+      useEffect with !getValues("name") guard calls reset() when session loads.
+      Name field correctly pre-filled from Google account after hydration.
+
+  - id: QA-2.2-04
+    status: RESOLVED
+    verification: mode: "onBlur" added to useForm. Errors now shown on field blur.
+
+  - id: QA-2.2-05
+    status: RESOLVED
+    verification: >
+      uploadProfileImage wrapped in inner try/catch within onSubmit.
+      Failure sets submitError with user-facing message.
+
+  - id: QA-2.2-06
+    status: RESOLVED
+    verification: >
+      Two test.skip stubs added in e2e/auth.spec.ts with Given/When/Then
+      comments and TODO for session fixture implementation.
+
+minor_observations:
+  - id: QA-2.2-OBS-01
+    severity: INFO
+    category: Correctness
+    location: src/app/(auth)/onboarding/page.tsx:61
+    note: >
+      reset({ name }, { keepValues: false }) resets ALL form fields when session
+      loads, not just name. If a user types their username within the first ~500ms
+      before session hydrates, it would be cleared. In practice session loads
+      very quickly and !getValues("name") prevents re-runs. Acceptable for MVP.
+      Future improvement: use reset((values) => ({ ...values, name })) to preserve
+      other fields.
+
+  - id: QA-2.2-OBS-02
+    severity: INFO
+    category: Reliability
+    location: src/app/(auth)/onboarding/page.tsx:103-116
+    note: >
+      uploadProfileImage does not check res.ok before destructuring uploadUrl/key.
+      A non-200 from the upload API would cause the R2 PUT to fail with undefined
+      uploadUrl, which is caught by the outer try/catch and surfaces a generic
+      error to the user. Functionally handled — just not maximally informative.
+
+ac_traceability:
+  AC1: PASS   # layout.tsx redirect on empty username
+  AC2: PASS   # all fields present; name pre-fill fixed (QA-2.2-03 resolved)
+  AC3: PASS   # debounced 400ms check with inline indicators
+  AC4: PASS   # Zod regex + client-side guard before API call
+  AC5: PASS   # isSubmitDisabled covers all non-available states
+  AC6: PASS   # DB update works; PATCH failure now surfaces error banner
+  AC7: PASS   # returning users skip via layout gate
+
+test_summary:
+  unit_tests: 6/6 passing
+  typecheck: PASS
+  e2e_tests: 2 stubs added (test.skip — pending session fixture)

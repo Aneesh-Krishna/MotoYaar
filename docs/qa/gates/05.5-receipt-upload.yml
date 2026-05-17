@@ -1,0 +1,55 @@
+story: "5.5"
+title: "Receipt Upload"
+epic: "05 — Expense Tracking"
+reviewer: "Quinn (QA Agent, claude-sonnet-4-6)"
+reviewed_at: "2026-03-22"
+decision: PASS
+
+review_history:
+  - date: "2026-03-22"
+    decision: CONCERNS
+    summary: "1 broken test (MF1), missing ownership validation (MF2), 4 required tests unwritten (SF1)"
+  - date: "2026-03-22"
+    decision: PASS
+    summary: "All must-fix and should-fix resolved. 204/204 tests pass."
+
+resolved:
+  - id: MF1
+    title: "Broken regression test"
+    resolution: >
+      expenseService.delete.test.ts updated: receiptKey added to makeDbRow(),
+      @/lib/r2 mocked, stale stub test replaced with 3 new correct tests.
+
+  - id: MF2
+    title: "tempReceiptKey ownership not validated"
+    resolution: >
+      create() logs error and returns expense without receipt if prefix check fails.
+      update() throws ForbiddenError. Both paths covered by unit tests.
+
+  - id: SF1
+    title: "Missing required service tests"
+    resolution: >
+      16 new tests written across 3 files:
+      - route.test.ts: 6 tests (presigned URL, 401, 400, TTL, namespace scoping)
+      - expenseService.create.test.ts: 4 new tests including receipt finalization
+      - expenseService.update.test.ts: 5 new tests including replace/remove/ownership
+      Client file-size component test deferred — no RTL setup in project (advisory).
+
+open_advisory:
+  - id: A1
+    title: "No server-side file size enforcement on presigned uploads"
+    detail: >
+      Client-side 5MB validation only. Acceptable for MVP.
+      Track for future hardening via R2 presigned URL conditions.
+
+  - id: A2
+    title: "copyObject not wrapped in try-catch in update()"
+    detail: >
+      R2 failure during receipt replace causes entire expense update to fail.
+      Inconsistent with create() degradation behavior. Acceptable for MVP.
+
+pass_rate:
+  ac_coverage: "10/10"
+  test_regression: "204/204"
+  security: "pass"
+  overall: "PASS"

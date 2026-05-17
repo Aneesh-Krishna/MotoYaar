@@ -1,0 +1,104 @@
+story: "6.2 — Trip Detail Page"
+epic: "06 — Trip Logging"
+gate: PASS
+date: 2026-03-26
+reviewer: Quinn (QA Agent / claude-sonnet-4-6)
+resolved: 2026-03-26
+resolved_by: Dev Agent (James Bond / claude-sonnet-4-6)
+
+summary: >
+  All CONCERNS resolved. S1 (mapsLink XSS) fixed with dual-layer protection: Zod
+  https?:// refine in createTripSchema + render-time guard in page component. T1
+  (missing tests) resolved with expenseService.getByTripId.test.ts (3 tests) and
+  utils/__tests__/date.test.ts (6 tests). T2 (dead variable) cleaned up.
+  29 test files / 223 tests passing. typecheck and lint clean.
+
+original_summary: >
+  Functional implementation solid. All 8 ACs met (AC3 and AC5 partial by design/
+  architecture constraints). Two security/test findings required fixes before sign-off.
+
+ac_coverage:
+  pass: 6
+  partial: 2   # AC3 — no per-item currency (type has no currency field); AC5 — non-functional span (Story 5.3 dependency)
+  fail: 0
+
+findings:
+  - id: S1
+    severity: should-fix
+    status: resolved
+    category: security
+    title: "mapsLink rendered as raw href — potential javascript: XSS"
+    detail: >
+      trip.mapsLink is rendered directly as <a href={trip.mapsLink}> in TripDetailContent
+      without URL scheme validation. A user storing "javascript:alert(1)" as their maps
+      link would execute it on page load. Mitigated by owner-only access (getById enforces
+      ownership), but still a security smell and bad practice.
+    file: "src/app/(app)/trips/[id]/page.tsx:52-63"
+    fix: >
+      Add URL validation at the service or schema level — either validate mapsLink starts
+      with 'https://' or 'http://' in the createTripSchema (Zod url() validator), or
+      add a guard in the render: only render the anchor if mapsLink.startsWith('http').
+
+  - id: T1
+    severity: should-fix
+    status: resolved
+    category: testing
+    title: "expenseService.getByTripId and formatTripDateRange have no unit tests"
+    detail: >
+      Two new functions introduced in this story have zero test coverage.
+      expenseService.getByTripId() — no test for found/not-found/wrong-user cases.
+      formatTripDateRange() — no test for single-day, same-month range, cross-month range,
+      or null endDate edge cases.
+      Story testing requirements also specified TripDetailPage component rendering tests
+      (renders title/date/breakdown; shows maps link; shows vehicle link) — none written.
+    file: >
+      src/services/__tests__/ — missing expenseService.getByTripId.test.ts,
+      src/utils/__tests__/ — missing date.test.ts
+    fix: >
+      Add unit tests for getByTripId (found, null when not found, only returns
+      for matching userId). Add unit tests for formatTripDateRange (null endDate,
+      same day, same month range, cross-month range).
+
+  - id: T2
+    severity: info
+    status: resolved
+    category: testing
+    title: "Unused variable mockFindFirst in tripService.getById.test.ts"
+    detail: >
+      Line 6: `const mockFindFirst = vi.fn();` is declared but never used.
+      Clean dead code.
+    file: "src/services/__tests__/tripService.getById.test.ts:6"
+    fix: "Remove the unused declaration."
+
+  - id: U1
+    severity: info
+    category: ux
+    title: "AC5 — linkedExpense renders as non-interactive span, not a link"
+    detail: >
+      AC5 says 'Link to the auto-created vehicle expense entry'. Implementation renders
+      a <span> with cursor-default. Acknowledged Story 5.3 dependency in dev notes.
+      AC checkbox is marked done — teams should be aware this is a UI stub, not a
+      functional link. Story 5.3 must wire this up.
+    file: "src/app/(app)/trips/[id]/page.tsx:111-114"
+
+  - id: U2
+    severity: info
+    category: ux
+    title: "AC3 — no per-item currency column in breakdown table"
+    detail: >
+      AC3 specifies 'category, amount, currency' columns in the breakdown table.
+      TripBreakdownItem type has no currency field — all amounts implicitly INR.
+      Total cost uses formatINR (hardcoded). Not a code bug — architecture constraint.
+      If multi-currency breakdown items are ever needed, the type and schema must change.
+    file: "src/types/index.ts:83-86 (TripBreakdownItem)"
+
+  - id: A1
+    severity: info
+    category: architecture
+    title: "Two-step DB query (trip + vehicle) vs single relational query"
+    detail: >
+      getById fetches trip then vehicle in two sequential queries rather than a join.
+      Dev notes explain this correctly — no drizzle relations() defined in schema.
+      Acceptable pragmatic decision. If schema grows, adding relations() and using
+      'with:' would be more efficient. Track as tech debt.
+    file: "src/services/tripService.ts:27-45"

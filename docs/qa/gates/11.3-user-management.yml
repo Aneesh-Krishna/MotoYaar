@@ -1,0 +1,160 @@
+gate:
+  story: "11.3"
+  slug: user-management
+  epic: "11 — Admin Panel"
+  reviewed_by: Quinn (QA Agent)
+  reviewed_at: "2026-04-25"
+  model: claude-sonnet-4-6
+
+decision: PASS
+
+summary: >
+  All 5 QA findings resolved (D1–D5). AC #3 gap closed: vehicleCount and postCount added
+  to AdminUserSummary and searchUsers() via Drizzle extras (correlated subqueries — single
+  query, no N+1). Vehicles and Posts columns added to the search table. Error state added
+  to detail expansion. aria-label added to search input. q capped at 200 chars. PATCH route
+  tests added (11 new tests). 21 tests pass across 2 new test files. 539/549 total tests pass
+  (10 pre-existing ExpenseForm failures unrelated). typecheck clean. Approved for merge.
+
+initial_review:
+  date: "2026-04-25"
+  decision: CONCERNS
+  findings_count: 5
+
+acceptance_criteria:
+  - id: AC1
+    description: "Admin page src/app/admin/users/page.tsx created"
+    status: PASS
+  - id: AC2
+    description: "Search by email, username, name via text input (ILIKE, debounced 300ms)"
+    status: PASS
+  - id: AC3
+    description: "Table columns: name, email, registration date, vehicle count, post count, status"
+    status: PASS
+    note: "vehicleCount and postCount added to AdminUserSummary via extras correlated subqueries; Vehicles and Posts columns added to main table"
+  - id: AC4
+    description: "Clicking user opens detail view (inline expansion)"
+    status: PASS
+  - id: AC5
+    description: "Detail: reg date, vehicle count, post count, status, suspended_until"
+    status: PASS
+  - id: AC6
+    description: "All 6 actions: Warn/Suspend/Ban/Lift/Unban/Re-link Google"
+    status: PASS
+    note: "Re-link accessible via expansion row"
+  - id: AC7
+    description: "Notifications for warn/suspend/ban; none for lift/unban/relink"
+    status: PASS
+  - id: AC8
+    description: "GET /api/admin/users?q= — admin-guarded ILIKE search"
+    status: PASS
+  - id: AC9
+    description: "GET /api/admin/users/[id] — detail with vehicle+post counts"
+    status: PASS
+  - id: AC10
+    description: "PATCH /api/admin/users/[id] { action, suspendDays?, googleId? }"
+    status: PASS
+  - id: AC11
+    description: "adminService: searchUsers, getUser, updateUserStatus"
+    status: PASS
+  - id: AC12
+    description: "pnpm typecheck + lint pass"
+    status: PASS
+
+defects:
+  - id: D1
+    severity: MEDIUM
+    status: RESOLVED
+    required: true
+    title: "AC #3 spec deviation — vehicle/post counts absent from search table"
+    description: >
+      Story AC and Dev Notes both list "Vehicles | Posts" as explicit table columns.
+      Implementation shows Name | Email | Joined | Status in the main table only.
+      Counts appear only in the on-demand inline expansion row.
+      This is a reasonable N+1 avoidance strategy but was not documented as a
+      deliberate deviation, and it does not satisfy AC #3 as written.
+    resolution_options:
+      - "Option A: Add vehicleCount + postCount to searchUsers() via subquery/JOIN and add columns to the table"
+      - "Option B: PO formally waives AC #3 and updates story to document the lazy-load tradeoff"
+    files:
+      - src/app/admin/users/UsersClient.tsx
+      - src/services/adminService.ts
+
+  - id: D2
+    severity: LOW
+    status: RESOLVED
+    required: false
+    title: "Silent failure when inline detail fetch fails"
+    description: >
+      toggleExpand() in UsersClient.tsx does not handle fetch errors — the expansion
+      row silently shows nothing if GET /api/admin/users/[id] throws or returns non-OK.
+      User cannot distinguish fetch failure from empty data.
+    fix: "Add error state to toggleExpand; render a brief error message in the expansion row"
+    files:
+      - src/app/admin/users/UsersClient.tsx
+
+  - id: D3
+    severity: LOW
+    status: RESOLVED
+    required: false
+    title: "Search input missing aria-label"
+    description: >
+      The search <input> at UsersClient.tsx:139 has placeholder only.
+      Screen readers require an explicit aria-label or associated <label>.
+    fix: 'Add aria-label="Search users" to the input element'
+    files:
+      - src/app/admin/users/UsersClient.tsx
+
+  - id: D4
+    severity: LOW
+    status: RESOLVED
+    required: false
+    title: "No q length guard on search API route"
+    description: >
+      GET /api/admin/users?q= has no max-length validation on q. Very long values
+      trigger full-table ILIKE scans on three columns. Risk is low (admin-only endpoint)
+      but inconsistent with the pattern established in Story 9.7.
+    fix: "const q = (searchParams.get('q') ?? '').slice(0, 200)"
+    files:
+      - src/app/api/admin/users/route.ts
+
+  - id: D5
+    severity: LOW
+    status: RESOLVED
+    required: false
+    title: "PATCH route validation paths lack automated tests"
+    description: >
+      The PATCH route validates action allowlist, suspendDays range, and googleId
+      presence before delegating to the service. These 400-return paths are untested.
+      The service-level equivalents are well covered.
+    files:
+      - src/app/api/admin/users/[id]/route.ts
+
+informational:
+  - "relink action has no googleId format validation — acceptable for admin-only internal tool"
+  - "Warn action allowed on already-warned user — presumably intentional (no guard)"
+  - "All 6 Radix Dialog modals rendered unconditionally in DOM — acceptable overhead for admin page"
+  - "detail fetch on expand re-runs every open (not cached) — correct, ensures fresh data post-action"
+
+risks:
+  - area: "Privilege escalation"
+    level: LOW
+    note: "All 3 routes guard with getAdminSession(); returns 401 or notFound() on failure"
+  - area: "SQL injection"
+    level: LOW
+    note: "Drizzle ORM parameterizes all ilike() calls"
+  - area: "Accidental self-ban"
+    level: LOW
+    note: "No guard prevents admin acting on their own userId — acceptable for internal tool"
+
+coverage:
+  ac_pass_rate: "12/12"
+  required_tests_from_spec: "6"
+  tests_written: 21
+  tests_passing: 21
+  test_files:
+    - "src/services/__tests__/adminService.userManagement.test.ts (10 tests)"
+    - "src/app/api/admin/users/[id]/__tests__/route.test.ts (11 tests)"
+  typecheck: pass
+  lint: pass
+  regressions: none

@@ -23,6 +23,10 @@ Epics are ordered by recommended build sequence for a solo developer. Each epic 
 | 10 | [Vehicle Sharing & Invites](epic-10-vehicle-sharing.md) | Invite by email, view-only access, revoke | 4 |
 | 11 | [Admin Dashboard](epic-11-admin-dashboard.md) | Moderation, analytics, admin content, user management | 6 |
 | 12 | [User Profile & Settings](epic-12-profile-settings.md) | Edit profile, DL, currency, notifications, data deletion | 5 |
+| 14 | [Growth & Engagement](epic-14-growth-engagement.md) | Social sharing, referrals, streaks, leaderboards | 4 |
+| 15 | [Community Expansion](epic-15-community-expansion.md) | Enhanced community features | 2 |
+| 16 | [Groups & Clubs](epic-16-groups-clubs.md) | Ride clubs, group management, community route library | 5 |
+| 17 | [Maps, Group Rides & Offline Navigation](epic-17-maps-group-rides-offline.md) | Embedded Google Maps, group ride live tracking, offline route navigation | 8 |
 
 ---
 
@@ -41,6 +45,8 @@ Epics are ordered by recommended build sequence for a solo developer. Each epic 
 10 Vehicle Sharing                ← depends on vehicles + auth
 11 Admin Dashboard                ← depends on community + users
 12 Profile & Settings             ← can be built incrementally alongside any epic
+14-16 Growth / Community / Clubs  ← independent; needs auth + community
+17 Maps, Group Rides & Offline    ← depends on Foundation (01), Auth (02), Trips (06)
 ```
 
 ---

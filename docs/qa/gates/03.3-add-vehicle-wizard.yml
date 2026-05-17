@@ -1,0 +1,110 @@
+schema: 1
+story: "3.3"
+story_title: "Add Vehicle (6-Step Flow)"
+gate: PASS
+status_reason: >
+  All six top_issues resolved across two review cycles. All four previously-open
+  recommendations (purchasedAt validation, R2 TTL, vehicleService unit tests,
+  E2E spec) implemented by dev. 48/48 tests passing, typecheck and lint clean.
+  All 14 ACs verified. E2E tests present as test.skip pending auth storageState
+  (Story 3.1 follow-on) — consistent with project convention.
+reviewer: "Quinn (Test Architect)"
+model: "claude-sonnet-4-6"
+updated: "2026-03-19T12:40:00Z"
+expires: "2026-04-02T12:40:00Z"
+
+quality_score: 95
+
+evidence:
+  tests_reviewed: 13
+  tests_passing: 48
+  risks_identified: 6
+  e2e_specs: 4
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+    ac_gaps: []
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: >
+      Auth on all 3 API routes. R2 key ownership validated (DELETE handler).
+      Content-type allowlist enforced. imageKey stripped before DB insert.
+      R2_PUBLIC_URL guard — misconfiguration surfaces immediately as 500.
+  performance:
+    status: PASS
+    notes: >
+      1 SELECT + 1 INSERT for vehicle creation. R2 presigned URL avoids
+      server proxying image bytes. R2 TTL now 300s for vehicle images per spec.
+      generateUploadUrl default 60s preserved — no regression for other callers.
+  reliability:
+    status: PASS
+    notes: >
+      R2 PUT result checked — upload failures surface as user-visible error.
+      vehicleService.create() covered by 5 unit tests (ConflictError, uppercase
+      normalisation, imageKey strip, return shape, cross-user isolation).
+      E2E spec present as test.skip — activates with auth storageState.
+  maintainability:
+    status: PASS
+    notes: >
+      Clean step-component separation. StepWizard reusable. purchasedAt
+      validated at schema level (YYYY-MM-DD regex). generateUploadUrl
+      extended cleanly with optional param — no breaking change.
+
+top_issues:
+  - id: F1
+    severity: medium
+    status: RESOLVED
+    resolved_at: "2026-03-19"
+    title: "R2 PUT result not checked — silent upload failure possible"
+    file: "src/components/vehicles/AddVehicleWizard.tsx"
+
+  - id: F2
+    severity: medium
+    status: RESOLVED
+    resolved_at: "2026-03-19"
+    title: "R2_PUBLIC_URL not guarded — undefined stored as part of imageUrl"
+    file: "src/app/api/uploads/vehicle-image/route.ts"
+
+  - id: F3
+    severity: low
+    status: RESOLVED
+    resolved_at: "2026-03-19"
+    title: "onSave type annotation incorrect — () => void should be () => Promise<void>"
+    file: "src/components/vehicles/AddVehicleWizard.tsx"
+
+  - id: F4
+    severity: medium
+    status: RESOLVED
+    resolved_at: "2026-03-19"
+    title: "Missing unit tests for AC10 (409 conflict) and AC11 (success redirect)"
+    file: "src/components/vehicles/__tests__/AddVehicleWizard.test.tsx"
+
+  - id: F5
+    severity: low
+    status: RESOLVED
+    resolved_at: "2026-03-19"
+    title: "purchasedAt has no date format validation in createVehicleSchema"
+    file: "src/lib/validations/vehicle.ts"
+    resolution: "Added .regex(/^\\d{4}-\\d{2}-\\d{2}$/) — invalid formats now return 422"
+
+  - id: F6
+    severity: low
+    status: RESOLVED
+    resolved_at: "2026-03-19"
+    title: "R2 presigned URL TTL is 60s — story spec says 5 minutes"
+    file: "src/lib/r2.ts"
+    resolution: >
+      generateUploadUrl now accepts optional expiresIn param (default 60s).
+      vehicle-image route passes 300 — existing callers unaffected.
+
+waiver:
+  active: false
+
+recommendations:
+  immediate: []
+  future:
+    - action: >
+        Activate e2e/vehicle.spec.ts — remove test.skip once auth storageState
+        fixture is configured (Story 3.1 follow-on)
+      refs: ["e2e/vehicle.spec.ts"]

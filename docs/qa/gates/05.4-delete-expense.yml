@@ -1,0 +1,84 @@
+gate:
+  story: "5.4 — Delete Expense"
+  epic: "05 — Expense Tracking"
+  reviewed_by: "Quinn (QA Agent)"
+  model: "claude-sonnet-4-6"
+  initial_review: "2026-03-21"
+  final_review: "2026-03-21 (post-fix)"
+  decision: PASS
+
+ac_results:
+  AC1_delete_button_in_edit_view: PASS
+  AC2_confirm_modal_correct_text: PASS
+  AC3_trip_linked_no_delete_available: PASS
+  AC4_delete_api_endpoint: PASS
+  AC5_service_ownership_trip_block: PASS
+  AC6_r2_receipt_stub: PASS
+  AC7_onsaved_triggers_refresh: PASS
+  AC8_typecheck_lint: PASS
+
+pass_rate: "8/8 AC items pass"
+
+test_results:
+  total_tests: 188
+  passed: 188
+  failed: 0
+  new_tests_added: 8
+  files:
+    - "src/services/__tests__/expenseService.delete.test.ts"
+    - "src/components/expenses/__tests__/ExpenseForm.test.tsx"
+
+findings:
+  - id: F1
+    severity: BLOCKING
+    summary: "Missing component tests for delete button behavior"
+    detail: |
+      Story Testing Requirements specifies 3 component tests in ExpenseForm delete button suite:
+        - renders delete button in edit mode for non-trip-linked expense
+        - does not render delete button for trip-linked expense
+        - shows ConfirmModal when delete button clicked
+      None are present in ExpenseForm.test.tsx.
+      Additionally, `deleteExpense` is not included in the vi.mock("@/services/api/expenseApi")
+      factory (line 12-16), which will cause failures when delete interaction tests are added.
+      Tasks 4.3–4.5 were marked [x] without corresponding automated tests existing.
+    files_needed:
+      - "src/components/expenses/__tests__/ExpenseForm.test.tsx"
+    status: RESOLVED
+    resolution: "Added deleteExpense to expenseApi mock; added 3 ExpenseForm delete button tests; 188/188 pass"
+
+  - id: F2
+    severity: MINOR
+    summary: "whereText maxLength validation deferred from Story 5.3"
+    detail: |
+      z.string().optional() on whereText with no maxLength in expense validation schema.
+      Carried forward from Stories 5.1 → 5.2 → 5.3 → 5.4 without resolution.
+    status: DEFERRED
+    resolution: "Defer to Story 5.5"
+
+  - id: F3
+    severity: INFORMATIONAL
+    summary: "IDOR: 403 reveals expense existence to non-owners"
+    detail: |
+      expenseService.delete returns ForbiddenError("You do not own this expense") when
+      a valid expense exists but belongs to another user, rather than NotFoundError.
+      This reveals the existence of the expense ID to the caller.
+      Consistent with existing update() pattern; not introduced by this story.
+      Acceptable given internal/authenticated API scope.
+    status: ACCEPTED
+
+security: PASS
+typecheck: PASS
+lint: PASS
+
+blocking_issues: []
+
+non_blocking_issues:
+  - "F2: whereText maxLength (deferred to 5.5)"
+  - "F3: IDOR 403 pattern (accepted, consistent with codebase)"
+
+deferred:
+  - "F2: whereText maxLength validation"
+
+resolution_required_for_pass:
+  - "Add deleteExpense to vi.mock factory in ExpenseForm.test.tsx"
+  - "Add describe('ExpenseForm delete button') with 3 tests: render in edit mode, absent for trip-linked, ConfirmModal on click"

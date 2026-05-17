@@ -1,0 +1,107 @@
+gate:
+  story: "4.4"
+  slug: document-storage-preference
+  epic: "04 — Document Management"
+  decision: PASS
+  reviewed_by: Quinn (QA Agent)
+  reviewed_at: 2026-03-19
+  re_reviewed_at: 2026-03-19
+  model: claude-sonnet-4-6
+  qa_fixes_applied: 2026-03-19
+
+summary: >
+  Story 4.4 fully complete. All 9 ACs pass. All QA concerns resolved.
+  130 tests passing. storageKey column added with migration 0003.
+  generateAccessUrl signature corrected. Dead code removed.
+  Test coverage expanded. Clear for merge. Story 8.1 safe to start.
+
+ac_results:
+  - ac: 1
+    status: PASS
+    note: "parse-only deletes temp file after AI parse in documentService.create()"
+  - ac: 2
+    status: PASS
+    note: "full_storage moves temp to permanent R2 key; signed URL generated on access"
+  - ac: 3
+    status: PASS
+    note: "DocumentStorageSection renders Radix Switch + amber info box; toggle updates state"
+  - ac: 4
+    status: PASS
+    note: "PATCH /api/users/me accepts documentStoragePreference via Zod schema + userService.update()"
+  - ac: 5
+    status: PASS
+    note: "Stored/Parsed only badges render from doc.storageUrl in DocumentRow"
+  - ac: 6
+    status: PASS
+    note: "generateAccessUrl(key, expiresInSeconds = 900) — two-param signature, default 15-min TTL"
+  - ac: 7
+    status: PASS
+    note: "Privacy reminder text matches spec; <Link href='/profile/settings'> renders correctly"
+  - ac: 8
+    status: PASS
+    note: >
+      storageKey: text("storage_key") added to documents schema.
+      Migration 0003_motionless_bromley.sql generated.
+      documentService.create() populates both storageUrl and storageKey.
+      URL route uses storageKey ?? storageUrl with legacy fallback.
+  - ac: 9
+    status: PASS
+    note: "pnpm typecheck and pnpm lint both pass clean"
+
+concerns:
+  - id: C1
+    status: RESOLVED
+    title: "generateAccessUrl signature deviates from spec"
+    fix: "Added expiresInSeconds = 900 as optional second parameter; { expiresIn: expiresInSeconds } used internally"
+
+  - id: C2
+    status: RESOLVED
+    title: "userService.updateSettings() was dead code"
+    fix: "Method removed from userService.ts; update() handles documentStoragePreference"
+
+  - id: C3
+    status: RESOLVED
+    title: "storageKey column missing — cross-story risk for Story 8.1"
+    fix: >
+      storageKey: text("storage_key") added to schema.ts documents table.
+      mapRow() maps row.storageKey. create() populates storageKey = permanentKey.
+      URL route uses doc.storageKey ?? doc.storageUrl fallback.
+      Migration 0003_motionless_bromley.sql: ALTER TABLE documents ADD COLUMN storage_key text.
+      Document interface updated with storageKey?: string.
+
+  - id: C4
+    status: DEFERRED
+    title: "Type assertion in settings page"
+    note: "Advisory only. Acceptable for MVP. SQL CHECK constraint protects at DB boundary."
+
+  - id: C5
+    status: RESOLVED
+    title: "Missing test scenarios"
+    fix: >
+      Added: toggle-off direction (full_storage → parse_only),
+      failure-path (API error → toast.error + state unchanged),
+      explicit expiresInSeconds parameter test in r2.test.ts.
+
+test_results:
+  total_passing: 130
+  new_tests_added_post_fixes: 4
+  total_new_tests_this_story: 11
+  files:
+    - path: "src/lib/__tests__/r2.test.ts"
+      tests: 3
+      coverage: "happy path, default 900s TTL, explicit TTL override"
+    - path: "src/components/settings/__tests__/DocumentStorageSection.test.tsx"
+      tests: 5
+      coverage: "toggle-off default, API call on/off, text per pref, failure path + state rollback"
+    - path: "src/components/documents/__tests__/DocumentRow.test.tsx"
+      tests: 2
+      notes: "Stored / Parsed only badge assertions added to existing suite"
+    - path: "drizzle/migrations/0003_motionless_bromley.sql"
+      notes: "Migration generated: ALTER TABLE documents ADD COLUMN storage_key text"
+
+security:
+  owner_only_url: PASS
+  path_traversal_guard: PASS
+  ttl_appropriate: PASS
+  no_unsigned_file_access: PASS
+  legacy_row_fallback_safe: PASS

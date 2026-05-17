@@ -1,0 +1,133 @@
+gate:
+  story: "11.6"
+  slug: admin-analytics-dashboard
+  epic: "11 — Admin Panel"
+  reviewed_by: Quinn (QA Agent)
+  reviewed_at: "2026-04-26"
+  model: claude-sonnet-4-6
+
+decision: PASS
+
+initial_review:
+  date: "2026-04-26"
+  decision: CONCERNS
+  findings_count: 3
+
+summary: >
+  All 9 ACs satisfied. D1 (required) resolved: adminService.analytics.test.ts created with
+  all 5 specified test cases passing (totalUsers, newUsersThisWeek, parseSuccessRate,
+  parseSuccessRate-no-docs, weeklySignups shape). 551 tests passing total, 0 regressions,
+  typecheck and lint clean. D2 (badge semantics mismatch) and D3 (duplicate count query)
+  remain open as informational items; neither required for merge. Approved for merge.
+
+acceptance_criteria:
+  - id: AC1
+    description: "Admin dashboard at src/app/admin/page.tsx implemented"
+    status: PASS
+  - id: AC2
+    description: "8 metric cards: totalUsers, newUsersThisWeek, newUsersThisMonth, totalVehicles, totalPosts, totalComments, aiReportsThisMonth, parseSuccessRate"
+    status: PASS
+  - id: AC3
+    description: "Line chart (user growth, 12 weeks) + bar chart (community activity, 8 weeks, 2 series)"
+    status: PASS
+  - id: AC4
+    description: "Recharts loaded via next/dynamic with ssr: false"
+    status: PASS
+  - id: AC5
+    description: "Moderation badge in admin sidebar nav"
+    status: PASS
+    note: "Badge renders correctly; count semantics are spec-faithful but see D2"
+  - id: AC6
+    description: "GET /api/admin/analytics returns all metric data"
+    status: PASS
+  - id: AC7
+    description: "adminService.getAnalytics() in src/services/adminService.ts"
+    status: PASS
+  - id: AC8
+    description: "Data refreshed on page load, no real-time/polling"
+    status: PASS
+  - id: AC9
+    description: "pnpm typecheck and pnpm lint pass"
+    status: PASS
+
+defects:
+  - id: D1
+    severity: HIGH
+    status: RESOLVED
+    required: true
+    title: "Missing unit tests for getAnalytics() — required by story Testing Requirements"
+    description: >
+      Story specifies 5 unit test cases for adminService.getAnalytics():
+      totalUsers count, newUsersThisWeek count, parse success rate calculation,
+      parse success rate when no documents (100%), and weekly signups shape.
+      None existed in initial implementation.
+    resolution: >
+      Created src/services/__tests__/adminService.analytics.test.ts with all 5 required
+      test cases plus makeChain fluent mock helper. Uses vi.spyOn for helper methods
+      and mockReturnValueOnce for ordered db.select calls. 5/5 passing.
+    files:
+      - src/services/__tests__/adminService.analytics.test.ts
+
+  - id: D2
+    severity: MEDIUM
+    status: OPEN
+    required: false
+    title: "Badge count only reflects hidden posts, not 3+-report queue items"
+    description: >
+      pendingReportsCount counts postReport rows for posts where isHidden = true.
+      getReportedPosts() (the moderation page) surfaces posts where
+      isHidden OR reports.length >= 3. The badge shows 0 when the moderation
+      queue has un-hidden posts with 3+ reports — the primary moderation targets.
+      Implementation faithfully follows the story spec query; this is a spec-level gap.
+    fix: >
+      Option A: Update getPendingReportsCount() to COUNT DISTINCT posts where
+      isHidden = true OR report count >= 3 (matches moderation page logic).
+      Option B: PO confirms badge should only reflect hidden posts (current spec).
+    files:
+      - src/services/adminService.ts
+
+  - id: D3
+    severity: LOW
+    status: OPEN
+    required: false
+    title: "Duplicate pending count query on dashboard page load"
+    description: >
+      Admin layout calls getPendingReportsCount() on every page. Dashboard page
+      calls getAnalytics() which runs the same inner count query. On /admin,
+      the same DB query fires twice. Acceptable at this scale; minor cleanup opportunity.
+    fix: "Pass pendingCount from layout into children via a slot or React context, or accept the redundancy."
+    files:
+      - src/app/admin/layout.tsx
+      - src/services/adminService.ts
+
+informational:
+  - "Helper methods prefixed _ (e.g. _getParseSuccessRate) — no true privacy in plain object; acceptable for service singletons"
+  - "as unknown as Array<...> casts on db.execute() results — necessary workaround for postgres.js RowList type; correct runtime behavior"
+  - "newUsersThisWeek uses rolling 7-day window, not calendar ISO week start — documented deviation, spec explicitly allows it"
+  - "Pre-existing ExpenseForm test failures (10 tests) — unrelated to this story"
+
+risks:
+  - area: "Authentication"
+    level: LOW
+    note: "Both layout and API route independently guard with getAdminSession() — belt-and-suspenders"
+  - area: "SQL injection"
+    level: LOW
+    note: "All Drizzle queries parameterized; postgres.js template literals also parameterize"
+  - area: "Performance"
+    level: LOW
+    note: "11 parallel DB queries on dashboard load — correct use of Promise.all; admin traffic is minimal"
+
+coverage:
+  ac_pass_rate: "9/9"
+  required_tests_from_spec: 5
+  tests_written: 5
+  tests_passing: 5
+  test_files:
+    - "src/services/__tests__/adminService.analytics.test.ts (5 tests)"
+  total_tests_passing: 551
+  typecheck: pass
+  lint: pass
+  regressions: none (ExpenseForm failures pre-existing, unrelated)
+
+required_before_merge:
+  - "D1: RESOLVED — adminService.analytics.test.ts created, 5/5 passing"
