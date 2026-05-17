@@ -119,24 +119,15 @@ export default function OnboardingPage() {
   };
 
   const uploadProfileImage = async (file: File): Promise<string> => {
-    const res = await fetch("/api/uploads/profile-image", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ filename: file.name, contentType: file.type, fileSize: file.size }),
-    });
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const res = await fetch("/api/uploads/profile-image", { method: "POST", body: formData });
     if (!res.ok) {
-      const err = await res.json();
+      const err = await res.json().catch(() => ({}));
       throw new Error(err?.error?.message ?? "Failed to upload profile image.");
     }
-    const { uploadUrl, key } = await res.json();
-    const putRes = await fetch(uploadUrl, {
-      method: "PUT",
-      body: file,
-      headers: { "Content-Type": file.type },
-    });
-    if (!putRes.ok) {
-      throw new Error("Failed to upload profile image to storage.");
-    }
+    const { key } = await res.json();
     return `${process.env.NEXT_PUBLIC_R2_PUBLIC_URL}/${key}`;
   };
 

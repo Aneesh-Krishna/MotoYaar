@@ -176,6 +176,13 @@
       "when": 1747036800000,
       "tag": "0024_posts_club_id",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1747123200000,
+      "tag": "0025_comment_votes",
+      "breakpoints": true
     }
   ]
 }

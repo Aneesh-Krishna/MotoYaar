@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus, Car } from "lucide-react";
+import { Car } from "lucide-react";
 import { getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
 import { getCachedVehicles } from "@/lib/cache";
@@ -26,7 +26,6 @@ export default async function GaragePage() {
                 href="/garage/new"
                 className="inline-flex items-center gap-2 bg-primary text-white rounded-btn px-5 py-2.5 text-body font-semibold hover:bg-primary-dark transition-colors"
               >
-                <Plus size={16} aria-hidden="true" />
                 Add Vehicle
               </Link>
             }
@@ -44,20 +43,6 @@ export default async function GaragePage() {
           </ul>
         )}
       </div>
-
-      {!isEmpty && (
-        <Link
-          href="/garage/new"
-          aria-label="Add a new vehicle"
-          className="fixed right-4 bottom-[calc(4rem+env(safe-area-inset-bottom)+1rem)] z-30 lg:hidden
-                     w-14 h-14 bg-primary text-white rounded-full shadow-lg
-                     flex items-center justify-center
-                     hover:bg-primary-dark transition-colors
-                     focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-        >
-          <Plus size={24} aria-hidden="true" />
-        </Link>
-      )}
     </>
   );
 }

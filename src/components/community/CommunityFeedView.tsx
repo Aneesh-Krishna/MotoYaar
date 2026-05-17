@@ -333,7 +333,7 @@ export function CommunityFeedView({ initialPosts, initialHasMore, isAuthenticate
           </div>
 
           {/* Desktop sidebar: Trending tags */}
-          <aside className="hidden lg:block space-y-4">
+          <aside className="hidden lg:flex lg:flex-col gap-4 sticky top-[120px] self-start">
             <Link
               href="/community/clubs"
               className="flex items-center gap-3 bg-card rounded-card border border-border p-4 shadow-card hover:shadow-md transition-shadow"

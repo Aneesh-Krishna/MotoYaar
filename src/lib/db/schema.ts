@@ -332,11 +332,39 @@ export const comments = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     content: text("content").notNull(),
+    score: integer("score").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
     postIdIdx: index("idx_comments_post_id").on(table.postId),
     parentIdIdx: index("idx_comments_parent_id").on(table.parentCommentId),
+  })
+);
+
+// ─── Comment Votes ────────────────────────────────────────────────────────────
+export const commentVotes = pgTable(
+  "comment_votes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    commentId: uuid("comment_id")
+      .notNull()
+      .references(() => comments.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    type: text("type").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    commentIdIdx: index("idx_comment_votes_comment_id").on(table.commentId),
+    commentUserUnique: uniqueIndex("comment_votes_comment_id_user_id_unique").on(
+      table.commentId,
+      table.userId
+    ),
+    typeCheck: check(
+      "comment_votes_type_check",
+      sql`${table.type} IN ('up', 'down')`
+    ),
   })
 );
 
@@ -687,6 +715,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   posts: many(posts),
   comments: many(comments),
   postReactions: many(postReactions),
+  commentVotes: many(commentVotes),
   clubMemberships: many(clubMembers),
 }));
 
@@ -722,4 +751,10 @@ export const commentsRelations = relations(comments, ({ one, many }) => ({
     relationName: "commentReplies",
   }),
   replies: many(comments, { relationName: "commentReplies" }),
+  votes: many(commentVotes),
+}));
+
+export const commentVotesRelations = relations(commentVotes, ({ one }) => ({
+  comment: one(comments, { fields: [commentVotes.commentId], references: [comments.id] }),
+  user: one(users, { fields: [commentVotes.userId], references: [users.id] }),
 }));

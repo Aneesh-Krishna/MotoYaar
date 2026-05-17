@@ -78,6 +78,7 @@ export function ServiceCenterPicker({ value, onChange }: ServiceCenterPickerProp
     setNewForm({ name: query, city: "", pincode: "" });
     setNewFormError("");
     setShowDropdown(false);
+    setQuery("");
   };
 
   const handleNewFormSave = async () => {
