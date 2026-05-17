@@ -5,7 +5,13 @@ import * as schema from "./schema";
 const connectionString = process.env.DATABASE_URL!;
 
 // prepare: false required for pgBouncer compatibility
-const client = postgres(connectionString, { prepare: false });
+// max: 3 keeps pool small for serverless (each instance gets its own pool)
+// idle_timeout: 20 releases connections before Vercel's 25s function timeout
+const client = postgres(connectionString, {
+  prepare: false,
+  max: 3,
+  idle_timeout: 20,
+});
 
 // Singleton guard — prevents connection pool exhaustion on Next.js hot reloads in dev
 declare global {
