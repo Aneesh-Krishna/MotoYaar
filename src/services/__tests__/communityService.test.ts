@@ -20,6 +20,7 @@ const {
   mockReactionFindMany,
   mockCommentFindFirst,
   mockCommentFindMany,
+  mockCommentVoteFindFirst,
   mockSelect,
   makeChain,
   mockAdminFindFirst,
@@ -45,6 +46,7 @@ const {
   const mockReactionFindMany = vi.fn();
   const mockCommentFindFirst = vi.fn();
   const mockCommentFindMany = vi.fn();
+  const mockCommentVoteFindFirst = vi.fn();
   const makeChain = (data: unknown[]) => {
     const chain: any = {};
     chain.from = vi.fn().mockReturnValue(chain);
@@ -85,6 +87,7 @@ const {
     mockAdminFindFirst,
     mockDeleteObject,
     mockUserFindFirst,
+    mockCommentVoteFindFirst,
   };
 });
 
@@ -102,6 +105,9 @@ vi.mock("@/lib/db/client", () => ({
       comments: {
         findFirst: mockCommentFindFirst,
         findMany: mockCommentFindMany,
+      },
+      commentVotes: {
+        findFirst: mockCommentVoteFindFirst,
       },
       adminSettings: {
         findFirst: mockAdminFindFirst,
@@ -530,6 +536,7 @@ const COMMENT_BASE = {
   userId: "user-1",
   parentCommentId: null,
   content: "Great post!",
+  score: 0,
   createdAt: new Date("2026-04-14T10:00:00Z"),
 };
 
@@ -577,18 +584,20 @@ describe("communityService.addComment", () => {
     expect(result.content).toBe("Nice reply!");
   });
 
-  it("throws BadRequestError when replying to a reply (level 3 prevention)", async () => {
+  it("allows replying to a reply (unlimited nesting)", async () => {
     mockCommentFindFirst.mockResolvedValue({
       id: "comment-2",
       postId: "post-1",
-      parentCommentId: "comment-1", // itself a reply
+      parentCommentId: "comment-1", // itself a reply — now allowed
     });
+    const deepReply = { ...COMMENT_BASE, id: "comment-3", parentCommentId: "comment-2", content: "Deep reply" };
+    mockReturning.mockResolvedValue([deepReply]);
 
-    await expect(
-      communityService.addComment("post-1", "user-1", "Level 3 attempt", "comment-2")
-    ).rejects.toThrow(BadRequestError);
+    const result = await communityService.addComment("post-1", "user-1", "Deep reply", "comment-2");
 
-    expect(mockInsert).not.toHaveBeenCalled();
+    expect(mockInsert).toHaveBeenCalled();
+    expect(result.parentCommentId).toBe("comment-2");
+    expect(result.content).toBe("Deep reply");
   });
 
   it("throws BadRequestError when parentCommentId belongs to a different post", async () => {
@@ -625,29 +634,35 @@ const RAW_POST_DETAIL = {
     { id: "r1", postId: "post-1", userId: "user-1", type: "like", createdAt: new Date() },
     { id: "r2", postId: "post-1", userId: "user-2", type: "dislike", createdAt: new Date() },
   ],
-  comments: [
-    {
-      id: "c1",
-      postId: "post-1",
-      userId: "user-2",
-      parentCommentId: null,
-      content: "Great post!",
-      createdAt: new Date("2026-04-14T10:00:00Z"),
-      user: { id: "user-2", name: "Bob", username: "bob", profileImageUrl: null },
-      replies: [
-        {
-          id: "c2",
-          postId: "post-1",
-          userId: "user-3",
-          parentCommentId: "c1",
-          content: "Agreed!",
-          createdAt: new Date("2026-04-14T11:00:00Z"),
-          user: { id: "user-3", name: "Carol", username: "carol", profileImageUrl: null },
-        },
-      ],
-    },
-  ],
 };
+
+// Flat list of comments returned by the separate findMany call in getPost
+const RAW_FLAT_COMMENTS = [
+  {
+    id: "c1",
+    postId: "post-1",
+    userId: "user-2",
+    parentCommentId: null,
+    content: "Great post!",
+    score: 0,
+    deleted: false,
+    createdAt: new Date("2026-04-14T10:00:00Z"),
+    user: { id: "user-2", name: "Bob", username: "bob", profileImageUrl: null },
+    votes: [],
+  },
+  {
+    id: "c2",
+    postId: "post-1",
+    userId: "user-3",
+    parentCommentId: "c1",
+    content: "Agreed!",
+    score: 0,
+    deleted: false,
+    createdAt: new Date("2026-04-14T11:00:00Z"),
+    user: { id: "user-3", name: "Carol", username: "carol", profileImageUrl: null },
+    votes: [],
+  },
+];
 
 describe("communityService.updatePost", () => {
   const UPDATE_INPUT = {
@@ -753,6 +768,7 @@ describe("communityService.updatePost", () => {
 describe("communityService.getPost", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockCommentFindMany.mockResolvedValue(RAW_FLAT_COMMENTS);
   });
 
   it("returns full PostDetail with aggregated counts and comments", async () => {
@@ -791,18 +807,31 @@ describe("communityService.getPost", () => {
     expect(result.userReaction).toBeUndefined();
   });
 
-  it("counts commentCount as top-level + replies", async () => {
-    const postWithReplies = {
-      ...RAW_POST_DETAIL,
-      comments: [
-        { ...RAW_POST_DETAIL.comments[0], replies: [RAW_POST_DETAIL.comments[0].replies[0], RAW_POST_DETAIL.comments[0].replies[0]] },
-      ],
-    };
-    mockFindFirst.mockResolvedValue(postWithReplies);
+  it("counts commentCount across unlimited nesting depth", async () => {
+    const deepComments = [
+      { ...RAW_FLAT_COMMENTS[0] },
+      { ...RAW_FLAT_COMMENTS[1] },
+      { id: "c3", postId: "post-1", userId: "user-4", parentCommentId: "c2", content: "Deep!", score: 0, deleted: false, createdAt: new Date(), user: null, votes: [] },
+    ];
+    mockCommentFindMany.mockResolvedValue(deepComments);
+    mockFindFirst.mockResolvedValue(RAW_POST_DETAIL);
 
     const result = await communityService.getPost("post-1");
 
-    expect(result.commentCount).toBe(3); // 1 top-level + 2 replies
+    expect(result.commentCount).toBe(3); // c1 → c2 → c3
+    expect(result.comments[0].replies![0].replies).toHaveLength(1);
+  });
+
+  it("populates userVote from votes array", async () => {
+    const commentsWithVotes = [
+      { ...RAW_FLAT_COMMENTS[0], votes: [{ type: "up", userId: "user-99" }] },
+    ];
+    mockCommentFindMany.mockResolvedValue(commentsWithVotes);
+    mockFindFirst.mockResolvedValue(RAW_POST_DETAIL);
+
+    const result = await communityService.getPost("post-1", "user-99");
+
+    expect(result.comments[0].userVote).toBe("up");
   });
 });
 
@@ -950,6 +979,7 @@ const BASE_COMMENT = {
   userId: "user-1",
   parentCommentId: null,
   content: "A comment",
+  score: 0,
   deleted: false,
   createdAt: new Date("2026-04-22T10:00:00Z"),
   replies: [] as { id: string }[],

@@ -156,6 +156,8 @@ export interface Comment {
   userId: string;
   content: string;
   deleted?: boolean;
+  score: number;
+  userVote?: "up" | "down";
   createdAt: string;
   author?: Pick<User, "id" | "name" | "username" | "profileImageUrl">;
   replies?: Comment[];

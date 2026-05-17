@@ -159,21 +159,15 @@ export function EditProfileForm({ user }: EditProfileFormProps) {
   // ─── Upload profile image ────────────────────────────────────────────────────
 
   async function uploadProfileImage(file: File): Promise<string> {
-    const res = await fetch("/api/uploads/profile-image", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ filename: file.name, contentType: file.type, fileSize: file.size }),
-    });
-    if (!res.ok) throw new Error("Failed to get upload URL");
-    const { uploadUrl, key } = await res.json();
+    const formData = new FormData();
+    formData.append("file", file);
 
-    const putRes = await fetch(uploadUrl, {
-      method: "PUT",
-      body: file,
-      headers: { "Content-Type": file.type },
-    });
-    if (!putRes.ok) throw new Error("Failed to upload image");
-
+    const res = await fetch("/api/uploads/profile-image", { method: "POST", body: formData });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err?.error?.message ?? "Failed to upload image");
+    }
+    const { key } = await res.json();
     return `${process.env.NEXT_PUBLIC_R2_PUBLIC_URL}/${key}`;
   }
 

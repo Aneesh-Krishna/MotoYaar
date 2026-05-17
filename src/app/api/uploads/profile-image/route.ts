@@ -1,11 +1,9 @@
 import { getSession } from "@/lib/session";
 import { NextRequest, NextResponse } from "next/server";
-import { generateUploadUrl } from "@/lib/r2";
+import { putObject } from "@/lib/r2";
 import { handleApiError } from "@/lib/errors";
-import path from "path";
 
 const ALLOWED_CONTENT_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
-const MAX_FILENAME_LENGTH = 100;
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
 
 export async function POST(req: NextRequest) {
@@ -15,28 +13,45 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: { code: "UNAUTHORIZED" } }, { status: 401 });
     }
 
-    const { filename, contentType, fileSize } = await req.json();
+    const formData = await req.formData();
+    const file = formData.get("file") as File | null;
 
-    if (!contentType || !ALLOWED_CONTENT_TYPES.includes(contentType)) {
+    if (!file) {
       return NextResponse.json(
-        { error: { code: "VALIDATION_ERROR", message: "Invalid file type. Only JPEG, PNG, WebP, and GIF are allowed." } },
+        { error: { code: "VALIDATION_ERROR", message: "file is required" } },
         { status: 422 }
       );
     }
 
-    if (typeof fileSize !== "number" || fileSize > MAX_FILE_SIZE_BYTES) {
+    if (!ALLOWED_CONTENT_TYPES.includes(file.type)) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Invalid file type. Only JPEG, PNG, WebP, and GIF are allowed.",
+          },
+        },
+        { status: 422 }
+      );
+    }
+
+    if (file.size > MAX_FILE_SIZE_BYTES) {
       return NextResponse.json(
         { error: { code: "VALIDATION_ERROR", message: "File too large. Maximum allowed size is 5 MB." } },
         { status: 422 }
       );
     }
 
-    // Sanitize filename: strip path separators, limit length
-    const safeName = path.basename(String(filename ?? "upload")).slice(0, MAX_FILENAME_LENGTH);
-    const key = `${session.user.id}/profile/${safeName}`;
-    const uploadUrl = await generateUploadUrl(key, contentType);
+    const ext =
+      file.type === "image/png" ? "png" :
+      file.type === "image/webp" ? "webp" :
+      file.type === "image/gif" ? "gif" : "jpg";
+    const key = `${session.user.id}/profile/${crypto.randomUUID()}.${ext}`;
 
-    return NextResponse.json({ uploadUrl, key });
+    const buffer = Buffer.from(await file.arrayBuffer());
+    await putObject(key, buffer, file.type);
+
+    return NextResponse.json({ key });
   } catch (error) {
     return handleApiError(error);
   }

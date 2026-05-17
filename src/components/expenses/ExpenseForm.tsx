@@ -103,15 +103,7 @@ export function ExpenseForm({ vehicleId, vehicleName, expense, onSaved, onTripRe
 
     setIsUploadingReceipt(true);
     try {
-      const { uploadUrl, tempKey } = await requestReceiptUploadUrl(file.name, file.type);
-
-      const uploadRes = await fetch(uploadUrl, {
-        method: "PUT",
-        body: file,
-        headers: { "Content-Type": file.type },
-      });
-
-      if (!uploadRes.ok) throw new Error("Upload failed");
+      const { tempKey } = await requestReceiptUploadUrl(file);
 
       setTempReceiptKey(tempKey);
       setReceiptFileName(file.name);

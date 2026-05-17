@@ -6,31 +6,17 @@ import { PostForm } from "@/components/community/PostForm";
 import type { CreatePostInput } from "@/lib/validations/post";
 
 async function uploadPostImage(file: File): Promise<string> {
-  const res = await fetch("/api/uploads/post-image", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      filename: file.name,
-      contentType: file.type,
-      size: file.size,
-    }),
-  });
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const res = await fetch("/api/uploads/post-image", { method: "POST", body: formData });
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.error ?? "Upload failed");
   }
 
-  const { uploadUrl, key } = await res.json();
-
-  const putRes = await fetch(uploadUrl, {
-    method: "PUT",
-    headers: { "Content-Type": file.type },
-    body: file,
-  });
-
-  if (!putRes.ok) throw new Error("Failed to upload image to storage");
-
+  const { key } = await res.json();
   return `${process.env.NEXT_PUBLIC_R2_PUBLIC_URL}/${key}`;
 }
 

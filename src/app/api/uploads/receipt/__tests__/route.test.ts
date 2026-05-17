@@ -2,13 +2,13 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
-const { mockGetSession, mockGenerateUploadUrl } = vi.hoisted(() => ({
+const { mockGetSession, mockPutObject } = vi.hoisted(() => ({
   mockGetSession: vi.fn(),
-  mockGenerateUploadUrl: vi.fn(),
+  mockPutObject: vi.fn(),
 }));
 
 vi.mock("@/lib/session", () => ({ getSession: mockGetSession }));
-vi.mock("@/lib/r2", () => ({ generateUploadUrl: mockGenerateUploadUrl }));
+vi.mock("@/lib/r2", () => ({ putObject: mockPutObject }));
 vi.mock("@/lib/errors", () => ({
   handleApiError: vi.fn((err: unknown) =>
     Response.json({ error: String(err) }, { status: 500 })
@@ -23,12 +23,18 @@ import { POST } from "../route";
 
 const SESSION = { user: { id: "user-1" } };
 
-function makeRequest(body: object) {
+function makeRequest(file: File) {
+  const formData = new FormData();
+  formData.append("file", file);
   return new Request("http://localhost/api/uploads/receipt", {
     method: "POST",
-    body: JSON.stringify(body),
-    headers: { "Content-Type": "application/json" },
+    body: formData,
   });
+}
+
+function makeFile(name: string, type: string, size = 1024): File {
+  const content = new Uint8Array(size);
+  return new File([content], name, { type });
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
@@ -36,36 +42,34 @@ function makeRequest(body: object) {
 describe("POST /api/uploads/receipt", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockPutObject.mockResolvedValue(undefined);
   });
 
-  it("returns presigned PUT URL and temp key for valid JPG request", async () => {
+  it("uploads JPG receipt and returns temp key", async () => {
     mockGetSession.mockResolvedValue(SESSION);
-    mockGenerateUploadUrl.mockResolvedValue("https://r2.example.com/signed-put-url");
 
-    const res = await POST(makeRequest({ filename: "receipt.jpg", contentType: "image/jpeg" }));
+    const res = await POST(makeRequest(makeFile("receipt.jpg", "image/jpeg")) as never);
     const body = await res.json();
 
     expect(res.status).toBe(200);
-    expect(body.uploadUrl).toBe("https://r2.example.com/signed-put-url");
     expect(body.tempKey).toMatch(/^user-1\/receipts\/temp\/.+\.jpg$/);
+    expect(mockPutObject).toHaveBeenCalledOnce();
   });
 
-  it("returns presigned PUT URL for PNG", async () => {
+  it("uploads PNG receipt and returns temp key", async () => {
     mockGetSession.mockResolvedValue(SESSION);
-    mockGenerateUploadUrl.mockResolvedValue("https://r2.example.com/signed-put-url");
 
-    const res = await POST(makeRequest({ filename: "receipt.png", contentType: "image/png" }));
+    const res = await POST(makeRequest(makeFile("receipt.png", "image/png")) as never);
     const body = await res.json();
 
     expect(res.status).toBe(200);
     expect(body.tempKey).toMatch(/\.png$/);
   });
 
-  it("returns presigned PUT URL for PDF", async () => {
+  it("uploads PDF receipt and returns temp key", async () => {
     mockGetSession.mockResolvedValue(SESSION);
-    mockGenerateUploadUrl.mockResolvedValue("https://r2.example.com/signed-put-url");
 
-    const res = await POST(makeRequest({ filename: "receipt.pdf", contentType: "application/pdf" }));
+    const res = await POST(makeRequest(makeFile("receipt.pdf", "application/pdf")) as never);
     const body = await res.json();
 
     expect(res.status).toBe(200);
@@ -75,38 +79,27 @@ describe("POST /api/uploads/receipt", () => {
   it("returns 401 when not authenticated", async () => {
     mockGetSession.mockResolvedValue(null);
 
-    const res = await POST(makeRequest({ filename: "receipt.jpg", contentType: "image/jpeg" }));
+    const res = await POST(makeRequest(makeFile("receipt.jpg", "image/jpeg")) as never);
 
     expect(res.status).toBe(401);
-    expect(mockGenerateUploadUrl).not.toHaveBeenCalled();
+    expect(mockPutObject).not.toHaveBeenCalled();
   });
 
   it("returns 400 for unsupported content type", async () => {
     mockGetSession.mockResolvedValue(SESSION);
 
-    const res = await POST(makeRequest({ filename: "virus.exe", contentType: "application/octet-stream" }));
+    const res = await POST(makeRequest(makeFile("virus.exe", "application/octet-stream")) as never);
 
     expect(res.status).toBe(400);
-    expect(mockGenerateUploadUrl).not.toHaveBeenCalled();
-  });
-
-  it("uses 5-minute TTL (300 seconds) for the presigned URL", async () => {
-    mockGetSession.mockResolvedValue(SESSION);
-    mockGenerateUploadUrl.mockResolvedValue("https://r2.example.com/signed");
-
-    await POST(makeRequest({ filename: "receipt.jpg", contentType: "image/jpeg" }));
-
-    const [, , expiresIn] = mockGenerateUploadUrl.mock.calls[0];
-    expect(expiresIn).toBe(300);
+    expect(mockPutObject).not.toHaveBeenCalled();
   });
 
   it("scopes temp key to authenticated user's namespace", async () => {
     mockGetSession.mockResolvedValue({ user: { id: "user-xyz" } });
-    mockGenerateUploadUrl.mockResolvedValue("https://r2.example.com/signed");
 
-    await POST(makeRequest({ filename: "receipt.jpg", contentType: "image/jpeg" }));
+    const res = await POST(makeRequest(makeFile("receipt.jpg", "image/jpeg")) as never);
+    const body = await res.json();
 
-    const [key] = mockGenerateUploadUrl.mock.calls[0];
-    expect(key).toMatch(/^user-xyz\/receipts\/temp\//);
+    expect(body.tempKey).toMatch(/^user-xyz\/receipts\/temp\//);
   });
 });

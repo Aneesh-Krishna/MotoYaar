@@ -31,12 +31,11 @@ export async function getReceiptUrl(expenseId: string): Promise<{ signedUrl: str
   return apiRequest<{ signedUrl: string }>(`/expenses/${expenseId}/receipt-url`);
 }
 
-export async function requestReceiptUploadUrl(
-  filename: string,
-  contentType: string
-): Promise<{ uploadUrl: string; tempKey: string }> {
-  return apiRequest<{ uploadUrl: string; tempKey: string }>("/uploads/receipt", {
+export async function requestReceiptUploadUrl(file: File): Promise<{ tempKey: string }> {
+  const formData = new FormData();
+  formData.append("file", file);
+  return apiRequest<{ tempKey: string }>("/uploads/receipt", {
     method: "POST",
-    body: JSON.stringify({ filename, contentType }),
+    body: formData,
   });
 }

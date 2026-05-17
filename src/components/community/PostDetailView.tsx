@@ -39,10 +39,10 @@ export function PostDetailView({ post, currentUserId }: PostDetailViewProps) {
 
   const isOwnPost = currentUserId === post.userId;
   const isAuthenticated = !!currentUserId;
-  const totalCommentCount = commentList.reduce(
-    (sum, c) => sum + 1 + (c.replies?.length ?? 0),
-    0
-  );
+  function countAllComments(list: Comment[]): number {
+    return list.reduce((sum, c) => sum + 1 + countAllComments(c.replies ?? []), 0);
+  }
+  const totalCommentCount = countAllComments(commentList);
 
   async function handleReaction(type: PostReactionType) {
     if (!isAuthenticated) {
@@ -110,21 +110,21 @@ export function PostDetailView({ post, currentUserId }: PostDetailViewProps) {
     const res = await fetch(`/api/comments/${commentId}`, { method: "DELETE" });
     if (!res.ok) throw new Error("Failed to delete comment");
 
-    setCommentList((prev) => {
-      const updated = prev
+    function removeFromTree(list: Comment[]): Comment[] {
+      return list
         .map((c) => {
           if (c.id === commentId) {
-            if (c.replies && c.replies.length > 0) {
+            if ((c.replies?.length ?? 0) > 0) {
               return { ...c, content: "[deleted]", deleted: true };
             }
             return null;
           }
-          const filteredReplies = c.replies?.filter((r) => r.id !== commentId);
-          return { ...c, replies: filteredReplies };
+          return { ...c, replies: removeFromTree(c.replies ?? []) };
         })
         .filter(Boolean) as Comment[];
-      return updated;
-    });
+    }
+
+    setCommentList((prev) => removeFromTree(prev));
   }
 
   async function handleAddComment(content: string, parentId?: string) {
@@ -138,13 +138,15 @@ export function PostDetailView({ post, currentUserId }: PostDetailViewProps) {
     const newComment: Comment = await res.json();
 
     if (parentId) {
-      setCommentList((prev) =>
-        prev.map((c) =>
-          c.id === parentId
-            ? { ...c, replies: [...(c.replies ?? []), newComment] }
-            : c
-        )
-      );
+      function insertReply(list: Comment[]): Comment[] {
+        return list.map((c) => {
+          if (c.id === parentId) {
+            return { ...c, replies: [...(c.replies ?? []), { ...newComment, replies: [] }] };
+          }
+          return { ...c, replies: insertReply(c.replies ?? []) };
+        });
+      }
+      setCommentList((prev) => insertReply(prev));
     } else {
       setCommentList((prev) => [...prev, { ...newComment, replies: [] }]);
     }
