@@ -1,5 +1,5 @@
 import { db } from "@/lib/db/client";
-import { posts, postReactions, comments, postReports, adminSettings, users, clubMembers } from "@/lib/db/schema";
+import { posts, postReactions, comments, commentVotes, postReports, adminSettings, users, clubMembers } from "@/lib/db/schema";
 import { eq, desc, and, sql, ilike, or, gte, isNull, type SQL } from "drizzle-orm";
 import { NotFoundError, ForbiddenError, BadRequestError, ConflictError } from "@/lib/errors";
 import type { FeedPost, Comment, PostDetail } from "@/types";
@@ -11,16 +11,20 @@ const PAGE_SIZE = 20;
 
 type RawReaction = { type: string; userId: string };
 type RawCommentUser = { id: string; name: string; username: string | null; profileImageUrl: string | null };
-type RawReply = {
+type RawVote = { type: string; userId: string };
+type RawFlatComment = {
   id: string;
   postId: string;
   userId: string;
   parentCommentId: string | null;
   content: string;
+  score: number;
+  deleted?: boolean;
   createdAt: Date;
   user?: RawCommentUser | null;
+  votes?: RawVote[];
 };
-type RawComment = RawReply & { replies?: RawReply[] };
+type RawComment = RawFlatComment;
 type RawAuthor = { id: string; name: string; username: string | null; profileImageUrl: string | null };
 type RawPost = {
   id: string;
@@ -50,6 +54,49 @@ function mapAuthor(user?: RawAuthor | null) {
     username: user.username,
     profileImageUrl: user.profileImageUrl ?? undefined,
   };
+}
+
+function buildCommentTree(flat: RawFlatComment[], currentUserId?: string): Comment[] {
+  const map = new Map<string, Comment>();
+  const roots: Comment[] = [];
+
+  for (const c of flat) {
+    map.set(c.id, {
+      id: c.id,
+      postId: c.postId,
+      userId: c.userId,
+      parentCommentId: c.parentCommentId ?? undefined,
+      content: c.content,
+      score: c.score,
+      deleted: c.deleted,
+      userVote: currentUserId
+        ? (c.votes?.find((v) => v.userId === currentUserId)?.type as "up" | "down" | undefined)
+        : undefined,
+      createdAt: c.createdAt instanceof Date ? c.createdAt.toISOString() : String(c.createdAt),
+      author: mapAuthor(c.user),
+      replies: [],
+    });
+  }
+
+  for (const c of flat) {
+    const node = map.get(c.id)!;
+    if (c.parentCommentId) {
+      const parent = map.get(c.parentCommentId);
+      if (parent) {
+        parent.replies!.push(node);
+      } else {
+        roots.push(node);
+      }
+    } else {
+      roots.push(node);
+    }
+  }
+
+  return roots;
+}
+
+function countComments(comments: Comment[]): number {
+  return comments.reduce((sum, c) => sum + 1 + countComments(c.replies ?? []), 0);
 }
 
 function mapRawPost(row: RawPost, currentUserId?: string): FeedPost {
@@ -269,45 +316,26 @@ export const communityService = {
       with: {
         user: true,
         reactions: true,
-        comments: { with: { user: true, replies: { with: { user: true } } } },
       },
-    })) as unknown as (RawPost & { comments?: RawComment[] }) | null;
+    })) as unknown as RawPost | null;
 
     if (!raw) throw new NotFoundError("Post not found");
 
     const reactions = raw.reactions ?? [];
     const likes = reactions.filter((r) => r.type === "like").length;
     const dislikes = reactions.filter((r) => r.type === "dislike").length;
-    const rawComments = (raw.comments ?? []) as RawComment[];
-    const commentCount = rawComments.reduce(
-      (acc, c) => acc + 1 + (c.replies?.length ?? 0),
-      0
-    );
     const userReaction = currentUserId
       ? (reactions.find((r) => r.userId === currentUserId)?.type as FeedPost["userReaction"])
       : undefined;
 
-    const mappedComments: Comment[] = rawComments
-      .filter((c) => !c.parentCommentId)
-      .map((c) => ({
-        id: c.id,
-        postId: c.postId,
-        userId: c.userId,
-        parentCommentId: c.parentCommentId ?? undefined,
-        content: c.content,
-        createdAt: c.createdAt instanceof Date ? c.createdAt.toISOString() : String(c.createdAt),
-        author: mapAuthor(c.user),
-        replies: (c.replies ?? []).map((r) => ({
-          id: r.id,
-          postId: r.postId,
-          userId: r.userId,
-          parentCommentId: r.parentCommentId ?? undefined,
-          content: r.content,
-          createdAt: r.createdAt instanceof Date ? r.createdAt.toISOString() : String(r.createdAt),
-          author: mapAuthor(r.user),
-          replies: [],
-        })),
-      }));
+    const flatComments = (await db.query.comments.findMany({
+      where: eq(comments.postId, postId),
+      orderBy: (c) => [c.createdAt],
+      with: { user: true, votes: true },
+    })) as unknown as RawFlatComment[];
+
+    const mappedComments = buildCommentTree(flatComments, currentUserId);
+    const commentCount = countComments(mappedComments);
 
     return {
       id: raw.id,
@@ -444,7 +472,6 @@ export const communityService = {
       });
       if (!parent) throw new BadRequestError("Parent comment not found");
       if (parent.postId !== postId) throw new BadRequestError("Parent comment belongs to a different post");
-      if (parent.parentCommentId !== null) throw new BadRequestError("Cannot reply to a reply");
     }
 
     const [comment] = await db
@@ -463,39 +490,59 @@ export const communityService = {
       parentCommentId: comment.parentCommentId ?? undefined,
       userId: comment.userId,
       content: comment.content,
+      score: 0,
       createdAt: comment.createdAt instanceof Date ? comment.createdAt.toISOString() : String(comment.createdAt),
       author: mapAuthor(author),
       replies: [],
     };
   },
 
-  async getComments(postId: string): Promise<Comment[]> {
-    const rawComments = (await db.query.comments.findMany({
+  async getComments(postId: string, currentUserId?: string): Promise<Comment[]> {
+    const flat = (await db.query.comments.findMany({
       where: eq(comments.postId, postId),
-      with: { user: true, replies: { with: { user: true } } },
-    })) as unknown as RawComment[];
+      orderBy: (c) => [c.createdAt],
+      with: { user: true, votes: true },
+    })) as unknown as RawFlatComment[];
 
-    return rawComments
-      .filter((c) => !c.parentCommentId)
-      .map((c) => ({
-        id: c.id,
-        postId: c.postId,
-        userId: c.userId,
-        parentCommentId: c.parentCommentId ?? undefined,
-        content: c.content,
-        createdAt: c.createdAt instanceof Date ? c.createdAt.toISOString() : String(c.createdAt),
-        author: mapAuthor(c.user),
-        replies: (c.replies ?? []).map((r) => ({
-          id: r.id,
-          postId: r.postId,
-          userId: r.userId,
-          parentCommentId: r.parentCommentId ?? undefined,
-          content: r.content,
-          createdAt: r.createdAt instanceof Date ? r.createdAt.toISOString() : String(r.createdAt),
-          author: mapAuthor(r.user),
-          replies: [],
-        })),
-      }));
+    return buildCommentTree(flat, currentUserId);
+  },
+
+  async voteComment(commentId: string, userId: string, voteType: "up" | "down"): Promise<{ score: number; userVote: "up" | "down" | undefined }> {
+    const comment = await db.query.comments.findFirst({ where: eq(comments.id, commentId) });
+    if (!comment) throw new NotFoundError("Comment not found");
+
+    const existing = await db.query.commentVotes.findFirst({
+      where: and(eq(commentVotes.commentId, commentId), eq(commentVotes.userId, userId)),
+    });
+
+    let scoreDelta = 0;
+    let newUserVote: "up" | "down" | undefined;
+
+    if (existing) {
+      if (existing.type === voteType) {
+        // Toggle off
+        await db.delete(commentVotes).where(and(eq(commentVotes.commentId, commentId), eq(commentVotes.userId, userId)));
+        scoreDelta = voteType === "up" ? -1 : 1;
+        newUserVote = undefined;
+      } else {
+        // Switch vote
+        await db.update(commentVotes).set({ type: voteType }).where(and(eq(commentVotes.commentId, commentId), eq(commentVotes.userId, userId)));
+        scoreDelta = voteType === "up" ? 2 : -2;
+        newUserVote = voteType;
+      }
+    } else {
+      await db.insert(commentVotes).values({ commentId, userId, type: voteType });
+      scoreDelta = voteType === "up" ? 1 : -1;
+      newUserVote = voteType;
+    }
+
+    const [updated] = await db
+      .update(comments)
+      .set({ score: sql`${comments.score} + ${scoreDelta}` } as never)
+      .where(eq(comments.id, commentId))
+      .returning({ score: comments.score });
+
+    return { score: updated.score, userVote: newUserVote };
   },
 
   async deleteComment(commentId: string, userId: string): Promise<void> {
