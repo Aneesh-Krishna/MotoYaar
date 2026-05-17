@@ -13,7 +13,6 @@ import { formatCurrency, getCurrencySymbol } from "@/utils/currency";
 import { createExpenseSchema, type CreateExpenseInput } from "@/lib/validations/expense";
 import {
   createVehicleExpense,
-  createExpense,
   updateExpense,
   deleteExpense,
   getReceiptUrl,
@@ -177,8 +176,6 @@ export function ExpenseForm({ vehicleId, vehicleName, expense, onSaved, onTripRe
         });
       } else if (vehicleId) {
         await createVehicleExpense(vehicleId, { ...payload, tempReceiptKey });
-      } else {
-        await createExpense({ ...payload, tempReceiptKey });
       }
       toast.success("Expense saved");
       if (data.reason === "Service" && selectedServiceCenter) {

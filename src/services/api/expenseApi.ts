@@ -12,13 +12,6 @@ export async function createVehicleExpense(
   });
 }
 
-export async function createExpense(data: CreateExpenseInput): Promise<Expense> {
-  return apiRequest<Expense>("/expenses", {
-    method: "POST",
-    body: JSON.stringify(data),
-  });
-}
-
 export async function listVehicleExpenses(vehicleId: string): Promise<Expense[]> {
   return apiRequest<Expense[]>(`/vehicles/${vehicleId}/expenses`);
 }

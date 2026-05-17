@@ -15,7 +15,6 @@ vi.mock("sonner", () => ({
 
 vi.mock("@/services/api/expenseApi", () => ({
   createVehicleExpense: vi.fn(),
-  createExpense: vi.fn(),
   updateExpense: vi.fn(),
   deleteExpense: vi.fn(),
 }));
@@ -102,7 +101,6 @@ describe("ExpenseForm", () => {
 
     expect(onTripRedirect).toHaveBeenCalledOnce();
     expect(expenseApi.createVehicleExpense).not.toHaveBeenCalled();
-    expect(expenseApi.createExpense).not.toHaveBeenCalled();
   });
 
   it("shows validation error when submitted with no price", async () => {
@@ -114,7 +112,6 @@ describe("ExpenseForm", () => {
 
     expect(screen.getByText("Price must be greater than 0")).toBeInTheDocument();
     expect(expenseApi.createVehicleExpense).not.toHaveBeenCalled();
-    expect(expenseApi.createExpense).not.toHaveBeenCalled();
   });
 });
 
