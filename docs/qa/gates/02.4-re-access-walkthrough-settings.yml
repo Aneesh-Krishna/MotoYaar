@@ -1,0 +1,56 @@
+gate:
+  story: "2.4"
+  slug: re-access-walkthrough-settings
+  epic: "02"
+  reviewer: Quinn (QA Agent)
+  model: claude-sonnet-4-6
+  reviewed_at: 2026-03-19
+  review_pass: 2026-03-19
+  decision: PASS
+
+summary: >
+  All four ACs are met. AppTourButton correctly toggles WalkthroughModal via
+  local state with no DB save or redirect. WalkthroughPage regression is clean —
+  making onComplete/onSkip optional does not affect the existing first-time flow.
+  Typecheck passes. Two low-severity observations noted; neither is blocking.
+
+ac_traceability:
+  AC1: PASS    # "App tour" button visible in Settings Help section via AppTourButton
+  AC2: PASS    # WalkthroughModal reused directly — same 5-card component
+  AC3: PASS    # Identical navigation (Back/Skip/Get started) — no changes to modal flow
+  AC4: PASS    # close = () => setOpen(false) — modal hides, user stays on Settings, no redirect
+
+open_items:
+  - id: QA-2.4-01
+    severity: LOW
+    category: API Design
+    status: ACKNOWLEDGED
+    location: src/components/onboarding/WalkthroughModal.tsx — skipSave prop
+    note: >
+      skipSave is declared in the interface and destructured but never read in
+      the component body. The JSDoc comment states it controls save/redirect
+      behaviour, but it doesn't — that contract lives entirely in the parent's
+      callbacks. A future consumer passing skipSave={true} with a save-capable
+      callback would get no protection. Dev agent acknowledged this in completion
+      notes as "semantic/documentation flag". Acceptable given current scope;
+      recommend revisiting if WalkthroughModal gets a third consumer.
+
+  - id: QA-2.4-02
+    severity: LOW
+    category: Test Coverage
+    status: DEFERRED
+    location: e2e/auth.spec.ts
+    note: >
+      No test.skip stubs added for Story 2.4 scenarios (Settings → App tour opens,
+      close returns to Settings). Story explicitly permits manual-only verification,
+      but project convention (see 2.2, 2.3) adds stubs for future implementation.
+      Defer to a test hygiene pass or the next dev touching e2e/auth.spec.ts.
+
+regression:
+  walkthrough_page: PASS    # onComplete/onSkip optional change is backwards-compatible
+  typecheck: PASS
+
+test_summary:
+  typecheck: PASS
+  unit_tests: N/A (not required per story)
+  e2e_tests: N/A (no stubs added; manual verification per story spec)

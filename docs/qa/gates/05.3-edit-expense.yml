@@ -1,0 +1,83 @@
+gate:
+  story: "5.3 — Edit Expense"
+  epic: "05 — Expense Tracking"
+  reviewed_by: "Quinn (QA Agent)"
+  model: "claude-sonnet-4-6"
+  initial_review: "2026-03-21"
+  final_review: "2026-03-21"
+  decision: PASS
+
+ac_results:
+  AC1_tap_opens_prepopulated_sheet: PASS
+  AC2_all_fields_editable: PASS
+  AC3_trip_linked_readonly_indicator: PASS
+  AC4_reason_trip_excluded_in_edit: PASS
+  AC5_patch_api_called_on_save: PASS
+  AC6_service_update_ownership_check: PASS
+  AC7_save_closes_sheet_refreshes_list: PASS
+  AC8_typecheck_lint: PASS
+
+pass_rate: "8/8 AC items pass"
+
+test_results:
+  total_tests: 180
+  passed: 180
+  failed: 0
+  new_tests_added: 7
+  files:
+    - "src/services/__tests__/expenseService.update.test.ts"
+    - "src/components/expenses/__tests__/ExpenseForm.test.tsx"
+
+findings:
+  - id: F1
+    severity: BLOCKING
+    summary: "Required ExpenseForm edit mode tests not written"
+    detail: |
+      Story Testing Requirements specifies 3 component tests:
+        - pre-populates all fields from expense prop
+        - shows read-only indicator for trip-linked expense
+        - excludes 'Trip' chip from reason selector in edit mode
+      None are present in ExpenseForm.test.tsx (only add-mode tests exist).
+      expenseApi mock in that file also needs updateExpense added.
+    files_needed:
+      - "src/components/expenses/__tests__/ExpenseForm.test.tsx (edit mode describe block)"
+    status: RESOLVED
+    resolution: "3 edit mode tests written in ExpenseForm.test.tsx; updateExpense added to mock; 180/180 pass"
+
+  - id: F2
+    severity: MINOR
+    summary: "Redundant no-op ternary in ExpenseForm defaultValues (line 37)"
+    detail: |
+      `reason: expense.reason === "Trip" ? expense.reason : expense.reason`
+      Both branches identical — always expense.reason. Dead code.
+    status: RESOLVED
+    resolution: "Simplified to `reason: expense.reason`"
+
+  - id: F3
+    severity: MINOR
+    summary: "whereText maxLength still unaddressed (carried from 5.2 gate F2)"
+    detail: |
+      z.string().optional() with no maxLength in expense validation schema.
+      Deferred from Story 5.1 → 5.2 → 5.3 without resolution.
+    status: DEFERRED
+    resolution: "Defer to Story 5.4"
+
+  - id: F4
+    severity: INFORMATIONAL
+    summary: "onTripRedirect required in implementation vs optional per spec"
+    detail: |
+      Dev notes interface shows onTripRedirect?: () => void (optional).
+      Implementation makes it required. No functional impact — all callers provide it.
+    status: ACCEPTED
+
+security: PASS
+typecheck: PASS
+lint: PASS
+
+blocking_issues: []
+
+non_blocking_issues:
+  - "F3: whereText maxLength (deferred to 5.4)"
+
+deferred:
+  - "F3: whereText maxLength validation"

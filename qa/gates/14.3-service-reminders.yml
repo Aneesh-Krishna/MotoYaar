@@ -1,0 +1,55 @@
+id: 14.3-service-reminders
+story: "14.3 — Service Reminders (km + date-based)"
+reviewer: Quinn (QA Agent, claude-sonnet-4-6)
+reviewed_at: "2026-05-06"
+decision: PASS
+
+summary: >
+  All required and recommended fixes from the initial CONCERNS review have been applied and verified.
+  Typecheck, lint, and 14/14 tests pass. Story is clean for merge.
+
+prior_decision: CONCERNS
+prior_reviewed_at: "2026-05-06"
+
+resolved_findings:
+  - id: F3
+    resolution: "Fixed — `isNull(serviceReminders.lastServicedKm)` correctly replaces `eq(..., null as unknown as number)`. Baseline seeding now generates IS NULL in SQL."
+  - id: F1
+    resolution: "Fixed — `runDateReminderCheck` now fetches user record, checks pushNotificationsEnabled, dispatches via pushService + sendPushNotification with 410 stale-sub cleanup."
+  - id: F5
+    resolution: "Fixed — handleDelete and handleServiced both check res.ok, set error message on failure, clear error on retry. Error rendered in panel outside form."
+
+informational:
+  - id: F2
+    description: "Shared-vehicle viewers see empty reminders panel (owner's reminders filtered by userId). Acceptable privacy behaviour — no change needed."
+  - id: F4
+    description: "formatDue() shows only km interval for dual-interval reminders. Day interval omitted from display. Acceptable for current scope."
+  - id: F6
+    description: "`null as number | null` cast in serviceReminderConstants.ts — functional, low noise."
+  - id: N1
+    description: >
+      User record fetched per-reminder inside cron loop (runDateReminderCheck).
+      Consistent with cronService pattern. Acceptable at current scale; batch by userId if load grows.
+
+ac_coverage:
+  AC1: PASS
+  AC2: PASS
+  AC3: PASS
+  AC4: PASS
+  AC5: PASS
+  AC6: PASS
+  AC7: PASS
+  AC8: PASS
+  AC9: PASS
+  AC10: PASS
+  AC11: PASS
+
+test_summary:
+  total: 14
+  passing: 14
+  files: src/services/__tests__/serviceReminderService.test.ts
+  mocks_updated: "Added mockUserFindFirst, mockGetSubscriptions, mockSendPush for F1 push path"
+  known_gaps:
+    - listByVehicle not tested (low risk, simple query)
+    - exact threshold boundary (kmSinceService == kmInterval) not tested
+    - runDateReminderCheck with null lastServicedAt not tested

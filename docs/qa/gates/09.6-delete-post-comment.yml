@@ -1,0 +1,64 @@
+story: "9.6"
+slug: delete-post-comment
+epic: "09 — Community"
+reviewed_by: Quinn (QA Agent)
+reviewed_at: "2026-04-22"
+model: claude-sonnet-4-6
+
+decision: PASS
+
+reviews:
+  - round: 1
+    date: "2026-04-22"
+    decision: CONCERNS
+    summary: >
+      All 10 ACs implemented correctly. Two blocking issues found: modal stuck on
+      successful soft-delete (isLoading=true blocks interaction); 7 required unit
+      tests not written. Two minors: addComment missing deleted field; unused cn import.
+
+  - round: 2
+    date: "2026-04-22"
+    decision: PASS
+    summary: >
+      All round-1 findings resolved. Modal fix verified (finally block + success path close).
+      7 unit tests added and passing (45/45 in file). addComment now returns deleted field.
+      Unused import removed. Typecheck clean. Lint clean. No new issues found.
+
+resolved_issues:
+  - id: BUG-1
+    status: FIXED
+    verification: "handleConfirmDelete uses try/catch/finally; setDeleteModalOpen(false) called in both success and catch; setIsDeleting(false) in finally"
+
+  - id: BUG-2
+    status: FIXED
+    verification: "45/45 communityService tests pass; deletePost (5 tests) and deleteComment (4 tests) fully covered; hoisted r2 mock correctly structured via vi.hoisted"
+
+  - id: MINOR-1
+    status: FIXED
+    verification: "addComment returns deleted: comment.deleted; consistent with all other comment mappings"
+
+  - id: MINOR-2
+    status: FIXED
+    verification: "cn removed from import; only timeAgo imported from @/lib/utils"
+
+ac_coverage:
+  - ac: 1
+    status: PASS
+  - ac: 2
+    status: PASS
+  - ac: 3
+    status: PASS
+  - ac: 4
+    status: PASS
+  - ac: 5
+    status: PASS
+  - ac: 6
+    status: PASS
+  - ac: 7
+    status: PASS
+  - ac: 8
+    status: PASS
+  - ac: 9
+    status: PASS
+  - ac: 10
+    status: PASS

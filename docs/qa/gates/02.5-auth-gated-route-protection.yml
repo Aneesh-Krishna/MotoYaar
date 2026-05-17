@@ -1,0 +1,109 @@
+gate:
+  story: "2.5"
+  slug: auth-gated-route-protection
+  epic: "02"
+  reviewer: Quinn (QA Agent)
+  model: claude-sonnet-4-6
+  reviewed_at: 2026-03-19
+  decision: PASS
+  qa_fixes_applied: 2026-03-19
+
+summary: >
+  All five ACs verified post-fix. Matcher now correctly excludes /onboarding/walkthrough
+  (AC1 public access). Onboarding redirect now uses pathname.startsWith("/onboarding")
+  covering both /onboarding and /onboarding/walkthrough (AC4). token.sub null guard
+  added (QA-2.5-03). BannedError extracted into Suspense-wrapped child component
+  (QA-2.5-04). Redundant e2e test removed (QA-2.5-06). Typecheck clean. PASS.
+
+ac_traceability:
+  AC1: PASS     # Matcher excludes onboarding/walkthrough — unauthenticated access allowed
+  AC2: PASS     # withAuth + authorized callback handles unauthenticated redirect with callbackUrl
+  AC3: PASS     # NextAuth built-in callbackUrl redirect — no custom code needed
+  AC4: PASS     # !pathname.startsWith("/onboarding") covers /onboarding and /onboarding/walkthrough
+  AC5: PASS     # signIn callback returns /login?error=AccountBanned; BannedError renders in Suspense
+
+open_items:
+  - id: QA-2.5-01
+    severity: HIGH
+    category: Logic Bug
+    status: FIXED
+    location: src/middleware.ts:10
+    note: >
+      Middleware exempts `pathname !== "/walkthrough"` from the onboarding redirect,
+      but the actual walkthrough route is at /onboarding/walkthrough (per
+      src/app/(auth)/onboarding/walkthrough/ directory). The exemption is dead code.
+      A new user (no username) navigating to /onboarding/walkthrough will be
+      incorrectly redirected to /onboarding in a loop. Fix: change "/walkthrough"
+      to "/onboarding/walkthrough" or use pathname.startsWith("/onboarding").
+
+  - id: QA-2.5-02
+    severity: HIGH
+    category: AC Breach
+    status: FIXED
+    location: src/middleware.ts:33
+    note: >
+      AC1 specifies /walkthrough as a public route exempt from auth protection.
+      The matcher regex does not exclude /walkthrough or /onboarding/walkthrough.
+      Unauthenticated users cannot access the walkthrough. The Dev Notes spec
+      also omits this exclusion — a spec-level gap. AC is authoritative.
+      Fix: add walkthrough|onboarding/walkthrough to the negative lookahead.
+
+  - id: QA-2.5-03
+    severity: LOW
+    category: Type Safety
+    status: FIXED
+    location: src/lib/auth.ts:65
+    note: >
+      `eq(users.googleId, token.sub as string)` uses an unsafe cast. On
+      trigger === "update", account is undefined and token.sub could theoretically
+      be absent; the cast bypasses TypeScript's null check, silently passing
+      undefined to the DB query with no error thrown.
+      Fix: add guard `if ((trigger === "update" || account) && token.sub)`.
+
+  - id: QA-2.5-04
+    severity: LOW
+    category: Performance
+    status: FIXED
+    location: src/app/(auth)/login/page.tsx:8
+    note: >
+      useSearchParams() used without a Suspense boundary. In Next.js 14 this
+      causes the page to opt out of static rendering, generating a build warning.
+      For a login page this is low-risk but unnecessary.
+      Fix: wrap useSearchParams consumer in <Suspense fallback={null}>.
+
+  - id: QA-2.5-05
+    severity: INFO
+    category: AC Wording
+    status: ACKNOWLEDGED
+    location: src/app/(auth)/login/page.tsx:31
+    note: >
+      AC5 says "Your account has been suspended"; UI renders "Your account has
+      been permanently suspended." Dev Notes spec says "permanently suspended".
+      Implementation follows Dev Notes. Align AC or UI text for consistency.
+
+  - id: QA-2.5-06
+    severity: INFO
+    category: Test Hygiene
+    status: FIXED
+    location: e2e/auth.spec.ts:3-11
+    note: >
+      Two active tests both navigate to /garage unauthenticated. The first test
+      ("unauthenticated user is redirected to login") is a strict subset of the
+      second ("protected route redirects to login with callbackUrl"). First test
+      adds no coverage value; consider removing.
+
+regression:
+  typecheck: PASS
+  existing_e2e_tests: PASS
+
+test_summary:
+  typecheck: PASS
+  unit_tests: N/A
+  e2e_active:
+    - "protected route redirects to login with callbackUrl": PASS
+    - "community feed is accessible without login": PASS
+  e2e_skipped:
+    - "new user with empty username is redirected to onboarding": STUB (requires auth fixture)
+    - "banned user sees suspended error on login page": STUB (requires auth fixture)
+    - "/onboarding/walkthrough accessible without auth": STUB (requires playwright config)
+  missing_coverage: DEFERRED  # All stubs require authenticated session fixture not yet built

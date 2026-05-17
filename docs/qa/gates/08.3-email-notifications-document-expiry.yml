@@ -1,0 +1,221 @@
+story: "8.3 — Email Notifications for Document Expiry"
+epic: "08 — Notifications & Background Jobs"
+reviewer: "Quinn (QA Agent, claude-sonnet-4-6)"
+reviewed_at: "2026-04-13"
+decision: PASS
+
+history:
+  - date: "2026-04-13"
+    decision: CONCERNS
+    reason: >
+      B1: daysUntilExpiry === 1 renders "Expires today" in email body — factually wrong
+      (1 day remaining means tomorrow, not today). B2: silent skip with no log when user
+      exists but has no email address registered, breaking observability for opted-in users.
+      NB1: vehicleName and userName interpolated into HTML without sanitization — low XSS
+      risk in email context but could corrupt HTML for names containing < > chars.
+      NB2: cronService vehicle lookup path untested — makeDoc has no vehicleId so
+      db.query.vehicles.findMany is never exercised by existing test suite.
+  - date: "2026-04-13"
+    decision: PASS
+    reason: >
+      B1 resolved: daysUntilExpiry === 1 now renders "Expires tomorrow". Two new tests
+      added — "shows 'Expires tomorrow' label for daysUntilExpiry === 1" (asserts correct
+      label and absence of "Expires today") and "shows 'Expires in N days' label for
+      daysUntilExpiry > 1". B2 resolved: null-email guard split into two branches;
+      logger.warn called with userId and "Email notification skipped — no email address
+      on record"; existing test updated to assert the warn call. 15/15 emailService
+      tests pass, 16/16 cronService regression tests pass, typecheck clean. NB1-NB3
+      remain open as non-blocking.
+  - date: "2026-04-13"
+    decision: PASS
+    reason: >
+      Quinn verification pass. B1 confirmed: emailService.ts line 60 reads "Expires
+      tomorrow"; test at line 213 asserts presence of "Expires tomorrow" AND absence
+      of "Expires today" — correct and tight. B2 confirmed: lines 20-23 split the
+      null-email guard with logger.warn; test at line 102-105 asserts the warn is
+      called with matching userId and message. 15/15 tests independently verified
+      passing. One very-low observation added (NB4: guard order — opted-out user with
+      no email triggers warn rather than info; semantically accurate but worth noting).
+      Gate confirmed PASS.
+
+summary: >
+  All 9 ACs met. 15 emailService tests pass, 16 cronService regression tests pass.
+  typecheck clean, lint clean. B1 (wrong label) and B2 (missing log) both resolved.
+  NB1 (HTML escaping), NB2 (vehicle path coverage), NB3 (auth comment) remain open
+  as non-blocking observations — acceptable for ship.
+
+required_fixes:
+  - id: B1
+    status: RESOLVED
+    severity: medium
+    description: >
+      In buildDocumentExpiryEmailHtml(), the daysUntilExpiry === 1 branch renders
+      "Expires today" — but daysUntilExpiry === 1 means the document expires TOMORROW,
+      not today. Documents expiring today have daysUntilExpiry === 0, which is caught
+      by the `<= 0` branch (rendering "Expired"). The label for === 1 is factually wrong
+      and will confuse users receiving the email.
+
+      Location: src/services/emailService.ts:55-56
+        : doc.daysUntilExpiry === 1
+          ? '<span style="color:#f97316;font-weight:600;">Expires today</span>'
+    location: "src/services/emailService.ts:52-57"
+    recommended_fix: >
+      Change the daysUntilExpiry === 1 label to "Expires tomorrow":
+        doc.daysUntilExpiry <= 0
+          ? '<span style="color:#dc2626;font-weight:600;">Expired</span>'
+          : doc.daysUntilExpiry === 1
+            ? '<span style="color:#f97316;font-weight:600;">Expires tomorrow</span>'
+            : `<span style="color:#f97316;">Expires in ${doc.daysUntilExpiry} days</span>`
+    test_required: >
+      Add test: "email HTML shows 'Expires tomorrow' label for daysUntilExpiry === 1"
+      Setup: makeDoc(1), assert html contains "Expires tomorrow" and does NOT contain "Expires today".
+      Add test: "email HTML shows 'Expires in N days' for daysUntilExpiry > 1"
+      Setup: makeDoc(5), assert html contains "Expires in 5 days".
+
+  - id: B2
+    status: RESOLVED
+    severity: low
+    description: >
+      When a user exists in the DB (emailNotificationsEnabled: true) but has no email
+      address (email: null), the function returns silently with no log entry. This
+      masks the failure for any user who opted into email notifications but whose
+      email was never populated (e.g., users created before migration 0006 who haven't
+      re-logged in yet). There is no way to detect this condition in production logs.
+
+      Location: src/services/emailService.ts:19
+        if (!user || !user.email) return;
+    location: "src/services/emailService.ts:19"
+    recommended_fix: >
+      Split the null-return into two branches with appropriate logging:
+        if (!user) return;
+        if (!user.email) {
+          logger.warn({ userId }, "Email notification skipped — no email address on record");
+          return;
+        }
+    test_required: >
+      Update existing test "skips email when user has no email address" to also assert
+      that logger.warn is called with the userId and a message referencing no email address.
+
+non_blocking:
+  - id: NB1
+    severity: low
+    status: OPEN
+    description: >
+      vehicleName and userName are interpolated directly into the HTML template string
+      without sanitization. In the email context there is no script execution risk, but
+      user names or vehicle names containing < > & " chars could produce malformed HTML
+      that breaks the email's visual layout in some clients (e.g. a vehicle named
+      "Enfield <Custom>" would produce an unclosed tag in the doc row cell).
+    location: "src/services/emailService.ts:62, 84"
+    recommendation: >
+      Add a minimal HTML escaper for user-supplied content before interpolation:
+        function esc(s: string) {
+          return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        }
+      Then use esc(doc.vehicleName), esc(userName) in the template.
+      Note: doc.type is safe — constrained by DB check to known enum values.
+
+  - id: NB2
+    severity: low
+    status: OPEN
+    description: >
+      The cronService.ts vehicle batch lookup (db.query.vehicles.findMany) is not
+      exercised by any test because all makeDoc() fixtures omit vehicleId. The
+      vehicle fetch only runs when vehicleIds.length > 0, which never occurs in the
+      test suite. If db.query.vehicles were undefined in the mock, tests would still
+      pass. Adds a coverage gap where vehicleName enrichment is untested end-to-end.
+    location: "src/services/__tests__/cronService.test.ts"
+    recommendation: >
+      Add a test variant where makeDoc includes vehicleId: "vehicle-1" and
+      mockVehiclesFindMany returns [{ id: "vehicle-1", name: "Royal Enfield" }].
+      Assert that sendDocumentExpiryEmail is called with docs containing vehicleName.
+      This requires adding db.query.vehicles: { findMany: mockVehiclesFindMany } to
+      the vi.mock("@/lib/db/client") factory.
+
+  - id: NB4
+    severity: very-low
+    status: OPEN
+    description: >
+      Guard order: !user.email is checked before !user.emailNotificationsEnabled. A user
+      who has explicitly opted out (emailNotificationsEnabled: false) but also has no
+      email address (email: null) will receive a logger.warn ("no email on record") rather
+      than a logger.info ("user opted out"). Semantically the warn is accurate — there
+      is no email — but it could mildly mislead log-scanners looking for opt-out events
+      who would expect a logger.info. No functional impact.
+    location: "src/services/emailService.ts:19-28"
+    recommendation: >
+      Consider swapping the guard order: check emailNotificationsEnabled first (log info),
+      then check email (log warn). This way an opted-out user always produces a consistent
+      info log regardless of whether they have an email. Only worth doing if log-based
+      opt-out analytics matter.
+
+  - id: NB3
+    severity: very-low
+    status: OPEN
+    description: >
+      auth.ts changed from onConflictDoNothing to onConflictDoUpdate as a side-effect
+      of this story needing to store user email. The original code had comment "F-M1:
+      target googleId explicitly so username conflicts surface as real errors" — that
+      intent is still preserved (conflict target remains googleId), but the behavioral
+      change is worth noting for future auth reviewers. No functional regression, but
+      the comment F-M1 should be updated to reflect the new upsert behaviour.
+    location: "src/lib/auth.ts:30-38"
+    recommendation: >
+      Update F-M1 comment to: "F-M1: target googleId explicitly; updates email on
+      re-login so cron jobs can reach users; username conflicts still surface as real errors."
+
+ac_results:
+  - ac: 1
+    result: PASS
+    note: >
+      cronService calls emailService.sendDocumentExpiryEmail for both warningDocs
+      (daysUntilExpiry > 0 && <= window && !expiryWarningNotifiedAt) and expiredDocs
+      (daysUntilExpiry === 0 && !expiryNotifiedAt). Both paths confirmed in code and
+      covered by existing cronService tests.
+  - ac: 2
+    result: PASS
+    note: >
+      byUser Map groups all docs per user. Single emailService call per user in
+      sendBatchedDocumentNotification. Test "batches multiple expiring docs into ONE
+      notification per user" + emailService test "sends combined email for multiple docs"
+      both confirm.
+  - ac: 3
+    result: PASS
+    note: >
+      HTML template includes doc.type, doc.vehicleName (when present), formattedDate,
+      and CTA button "View in MotoYaar" → https://motoyaar.app/garage. Tests confirm
+      vehicle name, CTA link, and multi-doc content. B1 resolved — status labels
+      are now accurate ("Expires tomorrow" for daysUntilExpiry === 1).
+  - ac: 4
+    result: PASS
+    note: >
+      emailService.sendDocumentExpiryEmail(userId, docs: ExpiringDoc[]) implemented
+      in src/services/emailService.ts. ExpiringDoc interface exported for cronService use.
+  - ac: 5
+    result: PASS
+    note: >
+      sendEmail(to, subject, html) imported from @/lib/resend and called at line 34.
+      src/lib/resend.ts was already fully implemented (Resend SDK, env-var FROM_ADDRESS).
+  - ac: 6
+    result: PASS
+    note: >
+      Template is mobile-friendly (max-width 480px, inline styles, no media queries),
+      branded with #F97316 header, footer with settings link. B1 resolved — "Expires
+      tomorrow" now correctly used for daysUntilExpiry === 1. Branding and structure
+      confirmed correct.
+  - ac: 7
+    result: PASS
+    note: >
+      emailNotificationsEnabled checked at line 25; returns early with logger.info when
+      false. Test "skips email when user.emailNotificationsEnabled is false" confirms.
+      B2 resolved — null-email guard now emits logger.warn; test asserts the warn call.
+  - ac: 8
+    result: PASS
+    note: >
+      Migration 0006_email_notifications.sql adds email_notifications_enabled BOOLEAN
+      NOT NULL DEFAULT true. Drizzle schema updated. User interface updated. All consistent.
+  - ac: 9
+    result: PASS
+    note: >
+      pnpm typecheck clean (0 errors). pnpm lint clean (1 pre-existing img warning in
+      onboarding page — unrelated to this story).

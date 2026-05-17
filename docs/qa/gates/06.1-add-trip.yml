@@ -1,0 +1,101 @@
+story: "6.1 — Add Trip"
+epic: "06 — Trip Logging"
+gate: PASS
+date: 2026-03-22
+reviewer: Quinn (QA Agent / claude-sonnet-4-6)
+resolved: 2026-03-22
+resolved_by: Dev Agent (James Bond / claude-sonnet-4-6)
+
+summary: >
+  All CONCERNS resolved. S1 (vehicleId ownership), S2 (tripId in public schema), D1
+  (non-atomic writes), U1 (Escape submitting trip), and T1 (unit tests) all fixed.
+  26/26 test files, 210/210 tests passing. typecheck and lint clean.
+
+original_summary: >
+  Functional implementation solid. All 11 ACs met (AC2 partial is by story design).
+  Two security issues must be fixed before production. Data integrity, UX, and test
+  coverage gaps were recommended fixes.
+
+ac_coverage:
+  pass: 10
+  partial: 1  # AC2 — full-page trips/new by story design; BottomSheet for other 2 entry points
+  fail: 0
+
+findings:
+  - id: S1
+    severity: must-fix
+    category: security
+    title: "vehicleId ownership not validated in POST /api/trips"
+    detail: >
+      tripService.create() uses the provided vehicleId without calling
+      vehicleService.getWithAccessCheck(). An authenticated user can create a trip
+      linked to another user's vehicle, auto-inserting an expense under that vehicle.
+    file: "src/app/api/trips/route.ts + src/services/tripService.ts"
+    fix: >
+      Add `await vehicleService.getWithAccessCheck(data.vehicleId, userId)` in
+      tripService.create() before inserting the trip when vehicleId is present.
+
+  - id: S2
+    severity: must-fix
+    category: security
+    title: "tripId exposed in client-facing expense creation endpoints"
+    detail: >
+      createExpenseSchema now includes tripId as optional, making it accepted by
+      POST /api/expenses and POST /api/vehicles/{id}/expenses. Any user can link
+      their expense to a trip they don't own. Story intent was "used only by tripService."
+    file: "src/lib/validations/expense.ts"
+    fix: >
+      Either move tripId to a separate internal schema not exposed via API routes,
+      or add tripId ownership validation in expenseService.create() when tripId is provided.
+
+  - id: D1
+    severity: should-fix
+    category: data-integrity
+    title: "Non-atomic trip + expense creation"
+    detail: >
+      Trip DB insert and expense DB insert are two sequential awaits with no transaction.
+      If expense insert fails after trip insert, trip is saved without its auto-expense
+      and no error is surfaced to the user.
+    file: "src/services/tripService.ts:28-62"
+    fix: "Wrap both inserts in a Drizzle db.transaction() call."
+
+  - id: U1
+    severity: should-fix
+    category: ux
+    title: "Escape key on no-vehicle ConfirmModal silently submits trip"
+    detail: >
+      ConfirmModal onClose is mapped to handleNoVehicleSkip which calls submitTrip
+      with createGeneralExpense=false. Pressing Escape or clicking the overlay creates
+      the trip without user's explicit confirmation.
+    file: "src/components/trips/TripForm.tsx:299-309"
+    fix: >
+      Separate onClose (dismiss without action) from the No/Skip action.
+      onClose should only call setShowNoVehiclePrompt(false) and return user to form.
+
+  - id: T1
+    severity: should-fix
+    category: testing
+    title: "4 story-specified tripService.create unit tests not implemented"
+    detail: >
+      Story testing section specifies 4 unit tests for tripService.create() covering
+      empty breakdown, vehicle expense, general expense, and tripId link. None written.
+    file: "src/services/tripService.ts"
+    fix: "Implement tests at src/services/__tests__/tripService.test.ts"
+
+  - id: U2
+    severity: info
+    category: ux
+    title: "endDate before startDate not validated"
+    detail: "Date range inputs accept reversed dates. Low priority — not an AC requirement."
+
+  - id: U3
+    severity: info
+    category: ux
+    title: "timeTaken accepts any string format"
+    detail: "AC3 specifies HH:MM format but no pattern validation exists in schema or UI."
+
+  - id: U4
+    severity: info
+    category: ux
+    title: "No Cancel button rendered in TripForm despite onCancel prop"
+    detail: "onCancel is passed but never called from within the form UI."

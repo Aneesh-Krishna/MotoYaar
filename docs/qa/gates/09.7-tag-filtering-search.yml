@@ -1,0 +1,114 @@
+gate:
+  story: "9.7"
+  slug: tag-filtering-search
+  epic: "09 — Community"
+  reviewed_by: Quinn (QA Agent)
+  reviewed_at: "2026-04-22"
+  model: claude-sonnet-4-6
+
+decision: PASS
+
+summary: >
+  All 10 acceptance criteria implemented and verified. All 4 QA defects resolved:
+  5 automated tests added for listPosts q parameter (50 total pass), q length capped at
+  200 chars in the API route, aria-label added to search input and tag dismiss button.
+  typecheck and lint pass clean.
+
+acceptance_criteria:
+  - id: AC1
+    description: "Tag chip highlights; dismiss chip shown above feed"
+    status: PASS
+  - id: AC2
+    description: "Tag filtering passes ?tag= to GET /api/posts"
+    status: PASS
+  - id: AC3
+    description: "Search bar visible above feed in Community tab"
+    status: PASS
+  - id: AC4
+    description: "GET /api/posts?q= with ILIKE on title + description"
+    status: PASS
+  - id: AC5
+    description: "PostCard used; title matches rank above description; same-level by createdAt DESC"
+    status: PASS
+  - id: AC6
+    description: "Context-aware empty states for search and tag filters"
+    status: PASS
+  - id: AC7
+    description: "Search debounced 300ms"
+    status: PASS
+  - id: AC8
+    description: "URL params reflect active tag and search query"
+    status: PASS
+  - id: AC9
+    description: "communityService.listPosts() accepts optional q"
+    status: PASS
+  - id: AC10
+    description: "pnpm typecheck + pnpm lint pass"
+    status: PASS
+
+defects:
+  - id: D1
+    severity: MEDIUM
+    status: RESOLVED
+    title: "Missing automated tests for q parameter"
+    description: >
+      Story testing requirements specified 5 communityService tests and 2 debounce tests.
+      None were written. The existing communityService.test.ts mock infrastructure
+      (mockFindMany, makeRawPost) is already in place — minimal effort to add.
+    files:
+      - src/services/__tests__/communityService.test.ts
+    required_tests:
+      - "communityService.listPosts with q — returns posts matching title ILIKE"
+      - "communityService.listPosts with q — returns posts matching description ILIKE"
+      - "communityService.listPosts with q — ranks title matches before description matches"
+      - "communityService.listPosts with q — returns empty array when no matches"
+      - "communityService.listPosts with q — combines tag and q filters"
+
+  - id: D2
+    severity: LOW
+    status: RESOLVED
+    title: "No input length validation on q parameter"
+    description: >
+      q has no max-length guard. A very long string triggers a full-table ILIKE scan.
+      Drizzle ORM prevents SQL injection via parameterization, but performance risk exists.
+    fix: "Add .slice(0, 200) or similar in src/app/api/posts/route.ts before passing q to service"
+    files:
+      - src/app/api/posts/route.ts
+
+  - id: D3
+    severity: LOW
+    status: RESOLVED
+    title: "Search input missing aria-label"
+    description: >
+      <input type="search"> has only a placeholder. Screen readers need an explicit
+      aria-label or associated <label> element.
+    fix: 'Add aria-label="Search posts" to the input in CommunityFeedView.tsx line 154'
+    files:
+      - src/components/community/CommunityFeedView.tsx
+
+  - id: D4
+    severity: LOW
+    status: RESOLVED
+    title: "Active tag dismiss button missing accessible label"
+    description: >
+      The dismiss chip button renders "{activeTag}<X />" — screen readers announce only
+      the tag name with no indication the button removes the filter.
+    fix: "Add aria-label={`Remove ${activeTag} filter`} to the dismiss button"
+    files:
+      - src/components/community/CommunityFeedView.tsx
+
+informational:
+  - "URL sync useEffect fires idempotently on mount — no functional impact"
+  - "sort state not persisted in URL — AC8 only requires tag and q, accepted by design"
+  - "SSR pre-fetches unfiltered posts; client re-fetches on mount — accepted per dev notes"
+
+risks:
+  - area: "SQL injection"
+    level: LOW
+    note: "Drizzle ORM parameterizes all ilike calls"
+  - area: "Performance — long q value"
+    level: LOW-MEDIUM
+    note: "Full-table ILIKE scan with unbounded input; mitigated by D2 fix"
+  - area: "Test coverage gap"
+    level: MEDIUM
+    note: "Regression risk on listPosts q logic without automated tests"

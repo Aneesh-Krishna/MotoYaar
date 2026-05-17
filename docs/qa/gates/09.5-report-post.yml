@@ -1,0 +1,50 @@
+story: "9.5 — Report Post"
+epic: "09 — Community"
+date: "2026-04-21"
+reviewer: "Quinn (claude-sonnet-4-6)"
+decision: PASS
+
+summary: >
+  All 10 acceptance criteria implemented and verified. All 4 prior findings (R1–R4) resolved.
+  36/36 tests pass with no regression. typecheck and lint clean. Approved for merge.
+
+initial_review:
+  date: "2026-04-21"
+  decision: CONCERNS
+  findings_count: 4 # 2 required, 2 recommended
+
+re_review:
+  date: "2026-04-21"
+  decision: PASS
+  resolved:
+    - id: R1
+      description: "reportPost unit tests written"
+      detail: >
+        6 tests added: creates record, duplicate silent, auto-hide at threshold,
+        reads threshold from DB, default threshold=10, NotFoundError on bad postId.
+        Mock extended with db.select chain and db.query.adminSettings.findFirst.
+
+    - id: R2
+      description: "ReportModal.handleSubmit try/catch/finally added"
+      detail: >
+        fetch wrapped in try/catch/finally. Error toast on catch. Modal closes in finally.
+        Empty description stripped with || undefined before sending.
+
+    - id: R3
+      description: "Post existence check added to reportPost()"
+      detail: >
+        db.query.posts.findFirst guard at top of reportPost(). Throws NotFoundError if null.
+        Invalid postId now returns 404 instead of 500.
+
+    - id: R4
+      description: "Zod schema tightened to z.string().min(1).max(500).optional()"
+      detail: >
+        Empty string description rejected at API boundary. Client strips with || undefined.
+
+coverage:
+  ac_pass_rate: "10/10"
+  test_tasks_complete: "5/5 (6.1–6.5 all pass)"
+  total_tests: 36
+  new_tests: 6
+  typecheck: pass
+  lint: pass

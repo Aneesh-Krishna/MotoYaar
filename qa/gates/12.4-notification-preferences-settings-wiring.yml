@@ -1,0 +1,71 @@
+gate:
+  story: "12.4"
+  title: "Notification Preferences (Settings Wiring)"
+  epic: "12 — Profile & Settings"
+  reviewed_at: "2026-04-26"
+  reviewer: "Quinn (QA Agent — claude-sonnet-4-6)"
+  decision: PASS
+
+summary: >
+  All findings resolved. C1 fixed: CurrencySetting now accepts an optional initialCurrency
+  prop; SettingsView passes initialCurrency from the RSC, satisfying AC 7 fully. C3 fixed:
+  the three 12.5 stubs now carry context labels. C2 (Notifications heading style) remains
+  deferred — requires touching a Story 8.5 component, out of scope. 30/30 tests pass.
+  Story is approved for merge.
+
+review_history:
+  - round: 1
+    date: "2026-04-26"
+    decision: CONCERNS
+    blockers: []
+  - round: 2
+    date: "2026-04-26"
+    decision: PASS
+    blockers: []
+
+acceptance_criteria:
+  AC1_four_sections: PASS
+  AC2_general_currency: PASS
+  AC3_notifications_all_three: PASS
+  AC4_privacy_data_stubs: PASS
+  AC5_account_signout: PASS
+  AC6_no_subroutes: PASS
+  AC7_server_side_initial_values: PASS  # initialCurrency now prop-passed through RSC → SettingsView → CurrencySetting
+  AC8_typecheck_lint: PASS
+
+findings:
+  - id: C1
+    severity: CONCERN
+    status: RESOLVED
+    title: "initialCurrency not passed as prop to SettingsView (AC 7 partial gap)"
+    resolution: >
+      CurrencySetting now accepts optional initialCurrency prop. SettingsView Props
+      extended with initialCurrency: string. page.tsx passes user.currency ?? "INR".
+      CurrencySetting uses session?.user?.currency ?? initialCurrency ?? "INR" so
+      session value always wins after hydration, prop seeds the initial value.
+      New test added: CurrencySetting "accepts initialCurrency prop without error".
+      New test added: SettingsView "passes initialCurrency to CurrencySetting".
+
+  - id: C2
+    severity: CONCERN
+    status: DEFERRED
+    title: "Notifications section heading style inconsistent with other three sections"
+    resolution: >
+      Requires modifying NotificationsSection (Story 8.5 component). Out of scope.
+      Deferred to a future settings polish story.
+
+  - id: C3
+    severity: INFO
+    status: RESOLVED
+    title: "Three 12.5 stubs are visually identical 'Coming soon' rows"
+    resolution: >
+      PrivacyPolicyLink renders "Privacy policy — Coming soon".
+      DeleteStoredDocumentsAction renders "Delete stored documents — Coming soon".
+      DeleteAccountAction renders "Delete account — Coming soon".
+
+test_results:
+  SettingsView.test.tsx: "5/5 pass"
+  NotificationsSection.test.tsx: "12/12 pass"
+  CurrencySetting.test.tsx: "7/7 pass"
+  DocumentStorageSection.test.tsx: "6/6 pass"
+  total: "30/30 pass (settings suite)"

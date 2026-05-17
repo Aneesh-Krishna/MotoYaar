@@ -1,0 +1,117 @@
+gate:
+  story: "9.8"
+  slug: guest-community-access
+  epic: "09 — Community"
+  reviewed_by: Quinn (QA Agent)
+  reviewed_at: "2026-04-23"
+  model: claude-sonnet-4-6
+
+decision: PASS
+
+summary: >
+  Core guest access story is functionally complete. All primary AC paths are implemented and
+  verified — middleware already excluded community routes, LoginPromptModal created, isAuthenticated
+  plumbed through RSC → CommunityFeedView → PostCard, FAB moved to client component with guard,
+  PostDetailView reaction buttons trigger modal, comment input shows login prompt for guests.
+  Data exposure audit clean — no email ever returned. typecheck and lint pass.
+  Both defects resolved: D1 — CommentThread Reply button now shown for guests and triggers
+  LoginPromptModal via onLoginPrompt callback; D2 — PostCard guest guard tests added (4 tests,
+  13 total new tests pass, 460 passing overall).
+
+acceptance_criteria:
+  - id: AC1
+    description: "Community routes not protected by auth middleware"
+    status: PASS
+    notes: "Middleware matcher confirmed — community excluded. No change was needed."
+  - id: AC2
+    description: "Feed loads for unauthenticated visitors (same trending algorithm)"
+    status: PASS
+    notes: "RSC passes userId=undefined to listPosts; service returns userReaction=undefined correctly."
+  - id: AC3
+    description: "Like/Dislike/Comment/'New post' → LoginPromptModal for guests"
+    status: PASS
+    notes: >
+      PostCard like/dislike, PostDetailView reactions, top-level comment bar, FAB, and inline
+      Reply button in CommentThread all trigger LoginPromptModal for guests. D1 resolved.
+  - id: AC4
+    description: "LoginPromptModal: correct message + Google sign-in button"
+    status: PASS
+    notes: "Heading 'Join the conversation', message prop, signIn('google', {callbackUrl}) confirmed."
+  - id: AC5
+    description: "src/components/community/LoginPromptModal.tsx — client component"
+    status: PASS
+    notes: "'use client' directive present; file at correct path."
+  - id: AC6
+    description: "Guest feed uses same listPosts (userReaction=null for all posts)"
+    status: PASS
+    notes: "Returns undefined (JSON-absent) rather than null per spec wording — UI handles correctly."
+  - id: AC7
+    description: "GET /api/posts accepts optional session"
+    status: PASS
+    notes: "No auth gate on GET; session?.user.id passed; userReaction omitted for guests."
+  - id: AC8
+    description: "No email exposed — avatars and usernames OK"
+    status: PASS
+    notes: "All communityService Drizzle queries select id/name/username/profileImageUrl only."
+  - id: AC9
+    description: "pnpm typecheck and pnpm lint pass"
+    status: PASS
+    notes: "Both pass. Lint warnings pre-existing and unrelated to this story."
+
+defects:
+  - id: D1
+    severity: LOW
+    status: RESOLVED
+    title: "Inline Reply button hidden for guests — no LoginPromptModal shown"
+    description: >
+      CommentThread.tsx:69 — canReply = !!currentUserId && !comment.deleted.
+      For guests (currentUserId=undefined), canReply=false and the Reply button is not rendered.
+      AC3 states all Comment interactions should show the modal; top-level commenting is covered
+      by the fixed bottom bar, but inline thread replies give no affordance to guests.
+      A guest reading a post with replies has no visual cue that signing in unlocks replying.
+    files:
+      - src/components/community/CommentThread.tsx
+      - src/components/community/PostDetailView.tsx
+    suggested_fix: >
+      Pass an onLoginPrompt callback from PostDetailView into CommentThread/TopLevelComment.
+      Render the Reply button for guests; on click call onLoginPrompt() instead of
+      toggling the inline reply input.
+
+  - id: D2
+    severity: LOW
+    status: RESOLVED
+    title: "No automated tests for PostCard guest interaction guards"
+    description: >
+      PostCard was converted to 'use client' and gained isAuthenticated prop + onClick guards
+      for like/dislike buttons. The new guard behavior (showing LoginPromptModal when
+      isAuthenticated=false) has no automated tests. Only the modal component itself is tested
+      in isolation via LoginPromptModal.test.tsx.
+    files:
+      - src/components/ui/__tests__/PostCard.test.tsx (create)
+    suggested_tests:
+      - "renders LoginPromptModal when guest clicks like button"
+      - "renders LoginPromptModal when guest clicks dislike button"
+      - "does not show LoginPromptModal initially (closed)"
+      - "like/dislike clicks do not navigate away"
+
+informational:
+  - "PostCard like/dislike for authenticated users do nothing (no API call) — pre-existing gap, not introduced by this story. Actual reactions occur in PostDetailView."
+  - "e.preventDefault() on PostCard engagement bar buttons is harmless — buttons are outside the Link element."
+  - "FAB moved from RSC to CommunityFeedView (client component) — correct architectural decision."
+  - "userReaction=undefined (JSON-absent) vs null per AC7 spec — minor wording discrepancy only, no functional impact."
+  - "RSC page-level render tests not implemented — accepted given RSC testing complexity and sufficient coverage at service + API layers."
+  - "Email exposure test in get.test.ts is tautological (tests mock fixture, not service behavior) — service-layer audit is the authoritative guarantee."
+
+risks:
+  - area: "Data exposure (email)"
+    level: LOW
+    note: "All community service queries audited; no email field ever selected."
+  - area: "Auth bypass (API mutation endpoints)"
+    level: LOW
+    note: "Reactions, comments, reports routes check getSession() and return 401 for guests."
+  - area: "Guest UX gap (inline replies)"
+    level: LOW
+    note: "Inline Reply button hidden rather than prompting login. Top-level comment prompt covers primary flow."
+  - area: "Test coverage (PostCard guest guards)"
+    level: LOW
+    note: "New onClick guard behavior in PostCard is untested — regression risk if isAuthenticated logic changes."

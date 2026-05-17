@@ -1,0 +1,119 @@
+gate:
+  story: "8.4"
+  title: "In-App Notification Bell & Drawer"
+  epic: "08 — Notifications & Background Jobs"
+  reviewed_by: Quinn (QA Agent)
+  reviewed_at: 2026-04-14
+  model: claude-sonnet-4-6
+  decision: PASS
+  prior_decision: CONCERNS (2026-04-14)
+
+summary: >
+  Re-review after QA fixes. All five concerns from the initial CONCERNS gate have been
+  fully resolved. 14/14 ACs pass. typecheck and lint clean. 28 tests pass (20 date + 8
+  service). Gate upgraded from CONCERNS → PASS. Story is ready to ship.
+
+resolution_of_prior_concerns:
+  - id: C1
+    title: "Mobile bottom sheet not implemented"
+    status: RESOLVED
+    evidence: >
+      NotificationDrawer.tsx now has a useEffect resize listener setting isMobile state
+      (breakpoint < 640px, matching Tailwind sm:). SheetContent receives
+      side={isMobile ? "bottom" : "right"} and h-[70vh] when on mobile.
+      Initializes to false (SSR-safe); set before user can interact. Fully correct.
+
+  - id: C2
+    title: "Silent fetch errors — no error state shown"
+    status: RESOLVED
+    evidence: >
+      fetchNotifications() now sets hasError=true in catch, renders AlertCircle +
+      "Couldn't load notifications." + "Try again" button.
+      handleTap() applies optimistic update then reverts isRead and unreadCount on PATCH
+      failure, returns early (no navigation). handleMarkAllRead() captures previous
+      snapshot, restores both notifications array and unread count on PATCH failure.
+      Revert arithmetic in handleTap is correct: decrementUnread() runs first, then
+      catch reads the decremented value and adds 1 back.
+
+  - id: C3
+    title: "User-isolation test doesn't verify WHERE clause content"
+    status: RESOLVED
+    evidence: >
+      Test now asserts: expect(mockUpdateWhere).toHaveBeenCalledWith(
+        expect.stringContaining(userId)
+      ).
+      Since eq() mock serializes as "eq:<value>", this proves the WHERE clause
+      contains the userId, not just that it was called.
+
+  - id: C4
+    title: "Missing 'minutes ago' test case"
+    status: RESOLVED
+    evidence: >
+      Added "returns '5 minutes ago' for 5 minutes" and "returns '1 minute ago' for
+      1 minute (singular)" — bonus coverage of the singular edge case.
+
+  - id: C5
+    title: "as unknown as Notification type bypass"
+    status: RESOLVED
+    evidence: >
+      Added mapNotification(row: typeof notifications.$inferSelect): Notification
+      following the project's mapExpense/mapTrip pattern. Handles type cast,
+      actionUrl: null → undefined, createdAt: Date → .toISOString().
+      Both create() and listByUser() now use the mapper. No unsafe casts remain.
+
+ac_traceability:
+  - ac: 1
+    status: PASS
+  - ac: 2
+    status: PASS
+    notes: Bottom sheet on mobile (< 640px), right-side on desktop. Responsive.
+  - ac: 3
+    status: PASS
+  - ac: 4
+    status: PASS
+  - ac: 5
+    status: PASS
+  - ac: 6
+    status: PASS
+  - ac: 7
+    status: PASS
+    notes: >
+      Optimistic update with full revert on PATCH failure. On failure, drawer stays
+      open and navigation is suppressed — correct UX.
+  - ac: 8
+    status: PASS
+    notes: >
+      Mark-all-read button only shown when unread exist. Optimistic update with
+      snapshot-based revert on failure.
+  - ac: 9
+    status: PASS
+  - ac: 10
+    status: PASS
+  - ac: 11
+    status: PASS
+  - ac: 12
+    status: PASS
+  - ac: 13
+    status: PASS
+  - ac: 14
+    status: PASS
+
+test_results:
+  typecheck: PASS
+  lint: PASS (1 pre-existing warning in unrelated file)
+  unit_tests: "28 passed (20 date + 8 service)"
+
+residual_risks:
+  - risk: "Unread count staleness on active session (push arrives while app is open)"
+    probability: medium
+    impact: low
+    status: ACCEPTED — count refreshes on every drawer open; documented as known MVP limitation.
+  - risk: "PATCH /api/notifications/[id] returns 500 for invalid UUID instead of 400"
+    probability: low
+    impact: low
+    status: ACCEPTED — session-scoped, no security exposure; cosmetic improvement only.
+
+gate_rationale: >
+  PASS issued because: all 14 ACs implemented and verified, all 5 prior concerns
+  resolved with quality fixes, typecheck/lint/tests all pass, no new issues introduced.
+  The two residual risks are low-impact and explicitly accepted for MVP scope.

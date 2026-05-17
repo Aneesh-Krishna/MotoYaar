@@ -1,0 +1,150 @@
+story: "4.3 — Document List with Expiry Status"
+epic: "04 — Document Management"
+reviewed_by: "Quinn (QA Agent)"
+reviewed_date: "2026-03-19"
+model: "claude-sonnet-4-6"
+
+decision: PASS
+
+re_reviewed_date: "2026-03-19"
+
+summary: >
+  Re-review following QA fix application. B1 resolved — computeDocumentStatus now
+  correctly returns "expired" for daysUntilExpiry <= 0, including today. C3 resolved —
+  two boundary tests added (past expiry, today = expiry); 119/119 tests passing.
+  C1 resolved — Replace stub added to DocumentRow kebab (gated on canView, wired in 4.4/4.5).
+  C4 resolved — inline comment documents owner-only intent in signed URL route.
+  C2 appropriately deferred to UX hardening pass. Typecheck and lint clean. Ready to ship.
+
+# ─── AC Traceability ──────────────────────────────────────────────────────────
+
+ac_traceability:
+  AC1_documents_tab_lists_all:    PASS      # Server fetch in page.tsx → DocumentsTab
+  AC2_document_row_renders:       PASS      # DocumentRow created, rendered in DocumentsTab
+  AC3_icon_label_expiry_badge:    PASS      # "d MMM yyyy" format confirmed by test ("15 Jun 2027")
+  AC4_status_badge_colors:        PASS      # B1 fixed: daysUntilExpiry<=0 → "expired"; tested
+  AC5_server_side_status:         PASS      # computeDocumentStatus called in listByVehicle
+  AC6_sort_soonest_nulls_last:    PASS      # asc(expiryDate) — PostgreSQL NULLs last in ASC
+  AC7_contextual_actions:         PASS      # C1 fixed: Replace stub added (gated on canView)
+  AC8_add_cta_always_visible:     PASS      # Present in both empty state and list state
+  AC9_empty_state:                PASS      # Text matches spec exactly
+  AC10_get_api_route:             PASS      # Route calls listByVehicle, returns computed status
+  AC11_listByVehicle_access_check: PASS     # vehicleService.getWithAccessCheck called first
+  AC12_typecheck_lint:            PASS      # Both confirmed passing
+
+# ─── Test Results ─────────────────────────────────────────────────────────────
+
+test_results:
+  total_tests: 119
+  passing: 119
+  failing: 0
+  typecheck: PASS
+  lint: PASS
+  new_test_files:
+    - "src/services/__tests__/documentService.listByVehicle.test.ts"
+    - "src/components/documents/__tests__/DocumentRow.test.tsx"
+  tests_added: 14
+  coverage_gaps:
+    - "DocumentsTab: empty state rendering — no automated test (manual verification only)"
+    - "DocumentsTab: handleView error path — deferred to C2 UX hardening pass"
+
+# ─── Bugs ─────────────────────────────────────────────────────────────────────
+
+bugs:
+  - id: B1
+    severity: MEDIUM
+    title: "Today's expiry date returns 'expiring' instead of 'expired'"
+    ac_violated: AC4
+    location: "src/services/documentService.ts — computeDocumentStatus, line 26"
+    detail: >
+      `if (daysUntilExpiry < 0) return "expired"` uses strict less-than.
+      When daysUntilExpiry === 0 (expiry is today), condition is false and
+      falls through to `<= notificationWindowDays` → returns "expiring" (amber).
+      AC4 explicitly states "Red (expired or expiry date is today)".
+    fix: "Change `< 0` to `<= 0` in computeDocumentStatus"
+    blocking: true
+    status: RESOLVED
+    resolution: >
+      Changed `daysUntilExpiry < 0` to `daysUntilExpiry <= 0`.
+      Two boundary tests added and passing: "returns expired when expiry date is today"
+      and "returns expired for a document whose expiry date is in the past".
+
+# ─── Concerns (Advisory) ──────────────────────────────────────────────────────
+
+concerns:
+  - id: C1
+    severity: LOW
+    title: "'Replace' option missing from kebab menu"
+    detail: >
+      AC7 specifies "Replace option available" when storageUrl + full_storage pref.
+      Implementation has View, Edit, Delete — no Replace item at all.
+      Edit and Delete are acceptably stubbed (deferred to 4.4); Replace not even stubbed.
+    recommendation: >
+      Add a stubbed "Replace" DropdownMenu.Item (no-op comment or toast "Coming soon")
+      to satisfy AC7 surface coverage. Wire in Story 4.4/4.5.
+    blocking: false
+    status: RESOLVED
+    resolution: >
+      Replace DropdownMenu.Item added to DocumentRow, gated on canView
+      (storageUrl + full_storage pref). No-op stub with comment directing to Story 4.4/4.5.
+
+  - id: C2
+    severity: LOW
+    title: "handleView async error silently unhandled in DocumentsTab"
+    detail: >
+      `getSignedUrl(docId)` rejection not caught in handleView; produces silent
+      unhandled promise rejection. No user feedback on network error, 404, or auth failure.
+    recommendation: "Wrap in try/catch, call toast.error() in UX hardening pass."
+    blocking: false
+    status: DEFERRED
+
+  - id: C3
+    severity: ADVISORY
+    title: "Missing boundary tests for computeDocumentStatus"
+    detail: >
+      No test for daysUntilExpiry < 0 (past expiry → expired).
+      No test for daysUntilExpiry === 0 (today → expired after B1 fix).
+      Tests currently cover: null expiry, 10 days future, far future, forbidden, default window.
+    recommendation: "Add both boundary cases alongside B1 fix."
+    blocking: false
+    status: RESOLVED
+    resolution: >
+      Two tests added to documentService.listByVehicle.test.ts:
+      "returns expired when expiry date is today" and
+      "returns expired for a document whose expiry date is in the past".
+      119/119 tests passing.
+
+  - id: C4
+    severity: DOCUMENTATION
+    title: "Signed URL route restricts to owner only — shared viewers excluded"
+    detail: >
+      GET /api/documents/[id]/url checks `doc.userId === session.user.id` only.
+      Shared vehicle viewers (vehicleAccess table) cannot retrieve signed URLs
+      even when they can list documents. May be intentional (owners only store files)
+      but not explicitly documented.
+    recommendation: >
+      Add inline comment documenting the intent. Revisit when shared viewer
+      scope for document access is defined.
+    blocking: false
+    status: RESOLVED
+    resolution: >
+      Inline comment added to GET /api/documents/[id]/url explaining owner-only
+      restriction rationale and flagging for future shared-viewer story review.
+
+# ─── Deferred Items ───────────────────────────────────────────────────────────
+
+deferred:
+  - "Edit document action implementation → Story 4.4"
+  - "Delete document action implementation → Story 4.4"
+  - "C1: Replace option wiring → Story 4.4/4.5"
+  - "C2: handleView error handling → UX hardening pass"
+  - "C4: Viewer access to signed URLs → future access model review"
+
+# ─── Prior Story Debt Resolution ──────────────────────────────────────────────
+
+prior_debt_resolved:
+  - id: "4.2-AC5"
+    from_story: "4.2"
+    title: "AC5 deferred: DocumentRow incomplete display → Story 4.3"
+    resolution: "DocumentRow now renders 'No expiry date' and gray StatusBadge for incomplete status"
+    status: RESOLVED

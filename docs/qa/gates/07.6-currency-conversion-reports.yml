@@ -1,0 +1,77 @@
+story: "7.6"
+title: "Currency Conversion for Reports"
+epic: "07 — Reports & Analytics"
+reviewer: "Quinn (QA Agent)"
+model: "claude-sonnet-4-6"
+date: "2026-04-13"
+decision: "PASS"
+
+summary: >
+  All 9 ACs satisfied. All 3 required/recommended findings from initial review
+  addressed and verified. 35/35 tests pass. Typecheck and lint clean.
+  Story is approved for merge.
+
+findings_resolution:
+  - id: F1
+    severity: REQUIRED
+    title: "Task 4.3 checkbox misleadingly marked complete"
+    resolution: >
+      RESOLVED. Task 4.3 unchecked and annotated with N/A rationale:
+      'CategoryDataPoint holds aggregated totals only; no per-expense original
+      currency data available. Banner at report level satisfies AC3.'
+
+  - id: F2
+    severity: RECOMMENDED
+    title: "hadCurrencyConversion utility not used in reportService"
+    resolution: >
+      RESOLVED. Imported as 'checkHadConversion' alias to avoid naming conflict.
+      Both inline .some() calls at lines 258 and 297 replaced with the utility.
+
+  - id: F3
+    severity: RECOMMENDED
+    title: "Missing getOverallReport USD→INR numeric accuracy test"
+    resolution: >
+      RESOLVED. Test added at reportService.getOverallReport.test.ts:182.
+      Asserts 12 USD → ~1000 INR for totalSpend via toBeCloseTo(1000, 0).
+
+  - id: F4
+    severity: INFO
+    title: "AC checkboxes not ticked in story"
+    resolution: "ACCEPTED. SM/PO responsibility on acceptance."
+
+  - id: F5
+    severity: INFO
+    title: "Session currency stale in forms until update() called"
+    resolution: "ACCEPTED. Dependency on Story 12.3. Infrastructure in place."
+
+ac_coverage:
+  AC1: PASS
+  AC2: PASS
+  AC3: PASS
+  AC4: PASS
+  AC5: PASS
+  AC6: PASS
+  AC7: PASS
+  AC8: PASS
+  AC9: PASS
+
+test_results:
+  total: 35
+  passed: 35
+  failed: 0
+  typecheck: PASS
+  lint: PASS
+
+files_reviewed:
+  - src/utils/currency.ts
+  - src/services/reportService.ts
+  - src/components/reports/VehicleReportView.tsx
+  - src/components/reports/OverallReportView.tsx
+  - src/types/next-auth.d.ts
+  - src/lib/auth.ts
+  - src/components/expenses/ExpenseForm.tsx
+  - src/components/trips/TripForm.tsx
+  - src/components/trips/TripEditForm.tsx
+  - src/utils/__tests__/currency.test.ts
+  - src/services/__tests__/reportService.test.ts
+  - src/services/__tests__/reportService.getOverallReport.test.ts

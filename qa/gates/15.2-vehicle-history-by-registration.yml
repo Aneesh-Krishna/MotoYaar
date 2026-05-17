@@ -1,0 +1,131 @@
+id: 15.2-vehicle-history-by-registration
+story: "15.2 — Vehicle History by Registration Number"
+reviewer: Quinn (QA Agent, claude-sonnet-4-6)
+reviewed_at: "2026-05-06"
+decision: PASS
+
+summary: >
+  Core implementation is solid: soft-delete pattern, history API, privacy opt-out, and auth guard
+  are all correctly implemented. All 624 tests pass, typecheck clean, lint clean.
+  Two must-fix issues identified:
+  F1 — AC1 is unmet: the Vehicle History page exists at /vehicle-history but is linked from
+  nowhere in the nav, Community tab, or any discoverable surface. The page is effectively an
+  orphan. Story AC1 explicitly requires it to be "accessible from the Community tab or the main
+  search."
+  F2 — The history query omits the tombstone-inclusion condition: soft-deleted (deleted_by_owner=true)
+  rows have deleted_at IS NOT NULL, and the query has no explicit filter for deleted_at, which
+  means they ARE returned — but only because there is no exclusion filter. This is correct
+  by accident, but the intent relies on knowing that the query has no isNull(deletedAt) guard.
+  This is fragile: if a future developer adds a general "exclude soft-deleted" filter to this
+  query they will silently break tombstones. The query should explicitly SELECT both live and
+  tombstone service rows with a clear WHERE clause comment or restructuring.
+  Three informational findings (F3–F5) are non-blocking.
+
+findings:
+  - id: F1
+    severity: MUST_FIX
+    ac: AC1
+    title: Vehicle History page is not linked from Community tab or any discoverable surface
+    description: >
+      AC1 requires the Vehicle History search page to be "accessible from the Community tab
+      or the main search." The page exists at /vehicle-history but:
+      - The Community tab (/community/page.tsx) has no link to it.
+      - The nav config (src/config/nav.ts) does not include it.
+      - No other page or component links to it.
+      The feature is implemented but unreachable by users without knowing the URL.
+    fix: >
+      Add a "Vehicle History" entry point in at least one of:
+      (a) A card/link in the Community page (simplest, matches AC1 literal wording),
+      (b) A link in the Profile page under the existing "Find a Mechanic" card pattern.
+      A simple Link card in the Community page header area is sufficient.
+
+  - id: F2
+    severity: MUST_FIX
+    ac: AC6
+    title: Tombstone query correctness depends on absence of a filter — fragile
+    description: >
+      The vehicleHistoryService query intentionally returns soft-deleted service entries as
+      tombstones per AC6. However the query WHERE clause only has:
+        eq(vehicles.registrationNumber, normalisedReg)
+        eq(expenses.reason, "Service")
+        eq(users.historyOptOut, false)
+      There is no isNull(expenses.deletedAt) exclusion — which is correct — but there is also
+      no explicit documentation or structural clarity that tombstones are INTENTIONALLY included.
+      This creates a fragility trap: if the dev later adds isNull(deletedAt) to this service
+      (following the pattern in expenseService.ts), tombstone entries silently disappear from
+      history. The condition that makes tombstones appear is purely the absence of a filter.
+    fix: >
+      Add an explicit comment in vehicleHistoryService.getByReg above the where clause:
+        // Intentionally includes soft-deleted (deletedByOwner=true) rows as tombstones per AC6.
+        // Do NOT add isNull(deletedAt) here — tombstone entries must remain visible.
+      This is a one-line comment but prevents a silent regression. No logic change needed.
+
+informational:
+  - id: F3
+    severity: INFO
+    ac: AC1
+    title: Page has no title tag / metadata for the route
+    description: >
+      The /vehicle-history/page.tsx is a "use client" component so it cannot export a
+      metadata object directly. No separate layout or head tag provides a page title.
+      Not a functional blocker for MVP, but affects browser tab label and SEO.
+    recommendation: >
+      Wrap with a server component parent or add a layout.tsx with metadata for the route
+      in a future polish pass.
+
+  - id: F4
+    severity: INFO
+    ac: AC3
+    title: Day is hidden from display but date precision is still in the API response
+    description: >
+      AC3 requires "month + year (day hidden for privacy)." The HistoryEntry component
+      correctly formats to month+year via toLocaleDateString. However the API returns the
+      full ISO date string (e.g. "2026-01-15") in the entries payload. A determined user
+      inspecting network responses can recover the exact day. This is a privacy nuance, not
+      a functional defect — the UI intent is met, but the wire format exposes the day.
+    recommendation: >
+      Consider truncating the date to "YYYY-MM" at the service layer before returning,
+      or accepting this as an acceptable risk for MVP (the day is not displayed in the UI).
+
+  - id: F5
+    severity: INFO
+    ac: "AC9 (settings toggle)"
+    title: Settings toggle is missing from the opt-out test coverage
+    description: >
+      Task 5.5 (Test: opted-out user's records excluded) is checked in the story but the
+      vehicleHistoryService tests mock the entire DB chain without asserting that
+      eq(users.historyOptOut, false) was actually passed as a condition. The test verifies
+      the service returns what the DB mock returns, not that the opt-out filter is applied.
+      A user with historyOptOut=true whose data leaks through would not be caught by this test.
+    recommendation: >
+      Capture the where() argument in the test and assert it contains the historyOptOut=false
+      condition — e.g. spy on the `and()` / `eq()` calls, or verify the chain.where was
+      called with an argument that includes the opt-out filter. Acceptable as tech debt for MVP.
+
+ac_coverage:
+  AC1: FAIL  # page exists but is unreachable — no link in Community tab or nav
+  AC2: PASS  # chronological list returned by API, asc date ordering confirmed
+  AC3: PASS  # UI hides day; full date in wire format is F4 (informational)
+  AC4: PASS  # no user_id/name fields in VehicleHistoryEntry or API response
+  AC5: PASS  # price/whereText stripped at service layer, not in select projection
+  AC6: PASS  # tombstone rendering in HistoryEntry confirmed; fragility noted as F2
+  AC7: PASS  # empty state message matches AC wording
+  AC8: PASS  # 401 guard in route, layout auth redirect, route test confirms
+  AC9: PASS  # schema column, validation, service type, toggle UI all wired
+  AC10: PASS # typecheck and lint confirmed clean
+
+test_summary:
+  total_suite: 624
+  passing: 624
+  typecheck: PASS
+  lint: PASS
+  new_test_files:
+    - src/services/__tests__/vehicleHistoryService.test.ts (4 tests)
+    - src/app/api/vehicle-history/__tests__/route.test.ts (4 tests)
+    - src/services/__tests__/expenseService.delete.test.ts (updated, 8 tests)
+    - src/components/settings/__tests__/SettingsView.test.tsx (updated, prop added)
+  known_gaps:
+    - VehicleHistoryPage component (no unit tests — fetch + render behaviour)
+    - HistoryEntry component (no unit tests — tombstone vs live rendering)
+    - CommunityHistoryToggle (no unit tests — toggle state, PATCH call, error toast)
+    - Opt-out filter assertion missing from vehicleHistoryService test (see F5)

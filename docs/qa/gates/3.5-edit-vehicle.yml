@@ -1,0 +1,81 @@
+story: "3.5"
+title: "Edit Vehicle"
+epic: "03 — Vehicle Management"
+reviewed_by: "Quinn (QA Agent) — claude-sonnet-4-6"
+review_date: "2026-03-19"
+
+decision: PASS
+
+fixes_applied_date: "2026-03-19"
+
+summary: >
+  All 10 acceptance criteria are implemented and verified. No security issues found.
+  Both required fixes have been applied: (1) imageUrl empty-string sanitized before
+  submit via `imageUrl: data.imageUrl || undefined`, and (2) uppercase normalization
+  test added for vehicleService.update(). 19/19 unit tests pass.
+
+required_fixes:
+  - id: FIX-1
+    severity: HIGH
+    title: "imageUrl empty string fails Zod .url() validation"
+    file: "src/components/vehicles/EditVehicleForm.tsx"
+    location: "onSubmit handler"
+    description: >
+      defaultValues.imageUrl = vehicle.imageUrl ?? "". When vehicle has no image,
+      data.imageUrl = "" on submit. z.string().url().optional() rejects "" (not undefined).
+      RHF silently blocks submission with no visible error to user.
+    fix: >
+      Add: await updateVehicle(vehicle.id, { ...data, imageUrl: data.imageUrl || undefined });
+      Matches AddVehicleWizard pattern.
+
+  - id: FIX-2
+    severity: MEDIUM
+    title: "Missing unit test: update() reg number uppercase normalization"
+    file: "src/services/__tests__/vehicleService.test.ts"
+    description: >
+      vehicleService.update() normalizes registrationNumber to uppercase in .set() but
+      no test verifies the stored value. vehicleService.create() has this test.
+    fix: >
+      Add test asserting mockUpdate.set receives uppercased registrationNumber.
+
+tech_debt:
+  - title: "R2 storage leak — original vehicle image never deleted"
+    priority: medium
+    description: >
+      Vehicle type has no imageKey field. When user changes photo, original R2 object
+      is orphaned. Requires schema migration (add imageKey to vehicles table).
+
+  - title: "Delete-before-upload pattern in handleFileChange"
+    priority: low
+    description: >
+      Session-uploaded image deleted before new upload completes. If new upload fails,
+      previously-uploaded image is lost. Inherited from AddVehicleWizard.
+
+ac_results:
+  - ac: 1
+    status: PASS
+  - ac: 2
+    status: PASS
+  - ac: 3
+    status: PASS
+  - ac: 4
+    status: PASS
+  - ac: 5
+    status: PARTIAL
+    note: "Session-key cleanup works; original image leak is known tech debt"
+  - ac: 6
+    status: PASS
+  - ac: 7
+    status: PASS
+  - ac: 8
+    status: PASS
+  - ac: 9
+    status: PASS
+  - ac: 10
+    status: PASS
+
+test_results:
+  unit_tests: "19/19 pass"
+  typecheck: PASS
+  lint: PASS
+  e2e: "Not required by story spec"

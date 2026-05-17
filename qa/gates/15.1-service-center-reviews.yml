@@ -1,0 +1,66 @@
+id: 15.1-service-center-reviews
+story: "15.1 — Mechanic / Service Center Reviews (UGC)"
+reviewer: Quinn (QA Agent, claude-sonnet-4-6)
+reviewed_at: "2026-05-06"
+decision: PASS
+
+summary: >
+  All must-fix findings from the prior CONCERNS review have been resolved and verified.
+  F1 (race condition) fixed with atomic INSERT ... ON CONFLICT DO UPDATE via onConflictDoUpdate.
+  F2 (wrong 201 status) fixed — route now returns 200 for the upsert path.
+  Typecheck clean, lint clean, 70/70 test files, 615/615 tests pass.
+  Remaining concerns (F3–F5) are non-blocking and acknowledged as acceptable for MVP.
+
+prior_decision: CONCERNS
+prior_reviewed_at: "2026-05-06"
+
+resolved_findings:
+  - id: F1
+    resolution: >
+      upsertReview now uses a single atomic INSERT ... ON CONFLICT DO UPDATE via Drizzle's
+      onConflictDoUpdate({ target: [serviceCenterId, userId], set: { rating, reviewText, updatedAt: sql`now()` } }).
+      The non-atomic findFirst + conditional insert/update block has been removed entirely.
+  - id: F2
+    resolution: >
+      Review route (src/app/api/service-centers/[id]/reviews/route.ts) now returns HTTP 200
+      instead of 201. Semantically correct for the upsert path which may create or update.
+
+informational:
+  - id: F3
+    description: >
+      8 of 10 ACs remain without automated unit tests (ServiceCenterPicker, RatingPrompt,
+      serviceCenterService). Accepted as tech debt for MVP. Recommended additions:
+      ServiceCenterPicker (renders, select, clear), RatingPrompt (skip, step transition, submit),
+      serviceCenterService.upsertReview (create then update).
+  - id: F4
+    description: >
+      Empty-form search on /find-mechanic returns up to 10 results with no WHERE clause.
+      Accepted for MVP — limit(10) bounds the risk. Recommend disabling Search when both fields empty.
+  - id: F5
+    description: >
+      Switching reason away from Service and back silently resets selectedServiceCenter state.
+      No UX signal to user. Low risk for MVP — no data loss, just mild UX friction.
+
+ac_coverage:
+  AC1: PASS
+  AC2: PASS
+  AC3: PASS
+  AC4: PASS
+  AC5: PASS
+  AC6: PASS
+  AC7: PASS
+  AC8: PASS
+  AC9: PASS
+  AC10: PASS
+
+test_summary:
+  total_suite: 615
+  passing: 615
+  typecheck: PASS
+  lint: PASS
+  known_gaps:
+    - ServiceCenterPicker component (no tests)
+    - RatingPrompt component (no tests)
+    - serviceCenterService unit tests (no tests)
+    - Find a Mechanic page (no tests)
+    - service-centers/[id] profile page (no tests)

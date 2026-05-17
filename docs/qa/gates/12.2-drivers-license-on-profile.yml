@@ -1,0 +1,139 @@
+# QA Gate — Story 12.2: Driver's License on Profile
+# Reviewed: 2026-04-26
+# Reviewer: Quinn (QA Agent, claude-sonnet-4-6)
+
+story: "12.2"
+epic: "12 — Profile & Settings"
+decision: PASS
+reviewed_at: "2026-04-26"
+
+summary: >
+  All 8 acceptance criteria met. The Driver's License sub-page (/profile/driving-licence)
+  and DriverLicenseSection component were already implemented from prior story work — this
+  story's additions are: getUserDocumentByType() service method, GET /api/documents?type= route,
+  and a query optimisation on the driving-licence RSC. Typecheck and lint clean. Three
+  advisory items raised — none block release.
+
+acceptance_criteria:
+  - id: AC1
+    description: "Profile page has DL section accessible from action card → DL sub-page"
+    status: PASS
+    note: >
+      Action card at profile/page.tsx links to /profile/driving-licence which renders
+      the full DriverLicenseSection. Satisfies the 'action card → DL section' variant.
+
+  - id: AC2
+    description: "If no DL: Upload CTA triggers DL-typed upload flow"
+    status: PASS
+    note: >
+      DriverLicenseSection 'Upload' button opens BottomSheet with DocumentUpload mode="dl".
+      DocumentUpload.tsx:89 initialises docType to "DL" when mode === "dl". Pre-selection confirmed.
+
+  - id: AC3
+    description: "If DL exists: expiry date + StatusBadge (valid/expiring/expired) + edit/delete"
+    status: PASS
+    note: >
+      DriverLicenseSection renders all three. StatusBadge reuses existing component.
+      Expiry formatted via date-fns format().
+
+  - id: AC4
+    description: "Edit DL reuses document upload flow"
+    status: PASS
+    note: >
+      Edit option opens BottomSheet with DocumentEditForm mode="dl". Reuses existing flow.
+
+  - id: AC5
+    description: "Delete DL: ConfirmModal → DELETE /api/documents/[id]"
+    status: PASS
+    note: >
+      DriverLicenseSection → ConfirmModal → deleteDocument(dlDoc.id) → DELETE /documents/:id. Confirmed.
+
+  - id: AC6
+    description: "DL fetched via GET /api/documents?type=DL"
+    status: PASS
+    note: >
+      Route exists at src/app/api/documents/route.ts and correctly handles ?type= filter.
+      Advisory: the driving-licence page fetches server-side via documentService.getUserDocumentByType()
+      directly (RSC) rather than calling the API endpoint. This is architecturally superior
+      (no client round-trip) but diverges from the AC's specified mechanism. Route is correct
+      and available for any future client-side consumers.
+
+  - id: AC7
+    description: "DL included in daily cron expiry check"
+    status: PASS
+    note: >
+      Cron queries WHERE expiry_date IS NOT NULL on documents table — includes vehicleId=null rows.
+      No code change required; confirmed in dev notes and cron implementation.
+
+  - id: AC8
+    description: "pnpm typecheck and pnpm lint pass"
+    status: PASS
+    note: "Both confirmed clean. Lint warnings are pre-existing in unrelated files."
+
+must_fix: []
+
+advisory:
+  - id: QA-12.2-01
+    severity: low
+    status: OPEN
+    file: src/services/__tests__/documentService.user-documents.test.ts:254-266
+    description: >
+      The third test ("queries findFirst with userId, type, and vehicleId IS NULL filter")
+      uses expect.anything() for both the where and orderBy arguments. This satisfies the
+      story's stated test name but does not verify that the isNull(documents.vehicleId)
+      predicate is actually present in the query — the test would pass even if the vehicleId
+      filter was accidentally removed from the implementation. The story testing requirement
+      explicitly calls for "only returns documents with vehicleId=null".
+    recommendation: >
+      Strengthen the test to assert the vehicleId IS NULL constraint. One approach: mock
+      two documents (one with vehicleId=null, one with vehicleId='some-id') and confirm
+      only the null one is returned. Alternatively, use a spy to capture the actual where
+      argument and assert isNull is included. Low risk given manual testing confirmed correct
+      behaviour, but the test provides false assurance of coverage.
+
+  - id: QA-12.2-02
+    severity: low
+    status: OPEN
+    file: src/app/api/documents/route.ts
+    description: >
+      GET /api/documents has no route-level unit test. Other API routes in this project
+      follow the pattern of test files at e.g. src/app/api/trips/__tests__/get.test.ts.
+      The route is simple (auth check → service call → JSON response) but is untested for:
+      401 when no session, empty array response when type filter yields no doc, and full
+      list response when no type filter.
+    recommendation: >
+      Add src/app/api/documents/__tests__/route.test.ts with the three scenarios above.
+      Low priority given the implementation is trivially thin, but consistent with project
+      patterns.
+
+  - id: QA-12.2-03
+    severity: info
+    status: WAIVED
+    file: src/app/api/documents/route.ts:12
+    description: >
+      The ?type= query parameter is not validated against known DocumentType values
+      before being passed to getUserDocumentByType(). Any arbitrary string yields a valid
+      (empty) query result rather than a 400. Auth-gated and user-scoped so no security
+      risk, but inconsistent with how other endpoints validate enum params.
+    recommendation: >
+      Waived for this story. If the endpoint gains wider usage, add a zod enum check
+      on the type param consistent with DocumentType union in @/types.
+
+test_coverage:
+  required_by_story: 3
+  implemented: 3
+  passing: 3
+  status: PASS_WITH_QUALITY_CONCERN
+  gaps:
+    - "QA-12.2-01: vehicleId IS NULL constraint not meaningfully asserted in test 3"
+    - "QA-12.2-02: No route-level test for GET /api/documents"
+
+files_reviewed:
+  - src/services/documentService.ts
+  - src/app/api/documents/route.ts
+  - src/app/(app)/profile/driving-licence/page.tsx
+  - src/components/documents/DriverLicenseSection.tsx
+  - src/components/documents/DocumentUpload.tsx
+  - src/services/__tests__/documentService.user-documents.test.ts
+  - src/lib/db/schema.ts (vehicle_id nullability)
+  - docs/stories/12.2.story.md

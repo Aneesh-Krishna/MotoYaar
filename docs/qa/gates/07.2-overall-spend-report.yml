@@ -1,0 +1,101 @@
+gate:
+  story: "7.2"
+  title: "Overall Spend Report (All Vehicles)"
+  decision: PASS
+  reviewed_by: Quinn (QA Agent)
+  reviewed_at: 2026-04-05
+  model: claude-sonnet-4-6
+  review_type: post-implementation (re-review after fixes)
+  prior_gates:
+    - decision: CONCERNS (pre-implementation spec gaps) — 2026-04-05
+    - decision: PASS (spec gaps resolved) — 2026-04-05
+    - decision: CONCERNS (post-implementation MF-1 + MF-2) — 2026-04-05
+
+summary: >
+  Story 7.2 is complete. All 15 ACs are met, 289/289 tests pass, typecheck clean, lint clean.
+  Both issues from the prior CONCERNS gate have been resolved: MF-1 (API route filter validation
+  now uses validTypes guard, returning 400-safe behaviour instead of TypeError/500) and MF-2
+  (unused ComparisonMonthlyDataPoint import removed from SpendChart.tsx). The service layer,
+  comparison logic, SpendChart Option A extension, and currency conversion are all well-designed.
+  Story is ready for Done.
+
+resolved_issues:
+  - id: MF-1
+    prior_severity: medium
+    resolution: >
+      validTypes guard added to src/app/api/reports/overall/route.ts lines 13-17.
+      Invalid filter param now defaults to "monthly" — matches RSC page validation pattern.
+      No TypeError/500 path remains.
+    verified: true
+
+  - id: MF-2
+    prior_severity: low
+    resolution: >
+      ComparisonMonthlyDataPoint removed from SpendChart.tsx:4 import.
+      Only CategoryDataPoint and MonthlyDataPoint remain — both used.
+    verified: true
+
+traceability:
+  AC1:  PASS  # src/app/(app)/reports/page.tsx — RSC with Suspense ✓
+  AC2:  PASS  # ProfileActionCard href updated to /reports ✓
+  AC3:  PASS  # Per-vehicle scrollable cards ✓
+  AC4:  PASS  # Total card with delta line ✓
+  AC5:  PASS  # Bar/Line/Donut + Chart/Table tabs ✓
+  AC6:  PASS  # BarChartWidget grouped bars when comparisonData present ✓
+  AC7:  PASS  # resolveComparisonRanges range mode + override ✓
+  AC8:  PASS  # resolveComparisonRanges yearly mode ✓
+  AC9:  PASS  # comparisonLabel displayed ✓
+  AC10: PASS  # Currency conversion banner (same as Story 7.1) ✓
+  AC11: PASS  # Generate AI Report button with toast placeholder ✓
+  AC12: PASS  # Route validated: filter guard prevents TypeError/500 on invalid input ✓
+  AC13: PASS  # getOverallReport fully implemented ✓
+  AC14: PASS  # convertAmount added to existing currency.ts; formatINR/formatCurrency preserved ✓
+  AC15: PASS  # typecheck clean; lint clean (pre-existing warning only) ✓
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: >
+      API route now validates filter param via validTypes guard before use.
+      Invalid inputs default to "monthly" — no TypeError/500 path.
+      Auth check correct (session guard). No IDOR — listByUserAndRange is userId-scoped.
+  performance:
+    status: PASS
+    notes: >
+      Two DB queries per request (primary + comparison) via Promise.all.
+      sumByVehicle filters in-memory — no N+1. User currency fetched once.
+      resolveComparisonRanges is pure computation.
+  reliability:
+    status: PASS
+    notes: >
+      resolveComparisonRanges switch exhaustiveness preserved. API route bypass risk
+      (prior MF-1) eliminated by validTypes guard. RSC page was already reliable.
+  maintainability:
+    status: PASS
+    notes: >
+      Helper functions well-named and pure. SpendChart extension backward-compatible (Option A).
+      Unused import removed. YTD label correct ("YYYY YTD vs YYYY-1").
+
+evidence:
+  tests_reviewed: 15
+  risks_identified: 2
+  risks_resolved: 2
+  test_results: "289/289 pass"
+  typecheck: clean
+  lint: clean (1 pre-existing warning in onboarding/page.tsx — unrelated)
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+    ac_gaps: []
+    ac_concerns: []
+
+quality_score: 95
+
+future_recommendations:
+  - action: >
+      hasComparison check (OverallReportView:50) uses d.comparison > 0 — if a comparison
+      period had expenses summing to exactly 0, the second chart series is silently omitted
+      while comparisonLabel is still shown. Consider always passing comparisonMonthlyData
+      when a comparison was explicitly requested.
+    refs: ["src/components/reports/OverallReportView.tsx:50"]
+  - action: "Add test for aggregateByCategory with mixed currencies to verify convertAmount is applied per-expense."
+    refs: ["src/services/__tests__/reportService.getOverallReport.test.ts"]
