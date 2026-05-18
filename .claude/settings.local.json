@@ -92,7 +92,9 @@
       "WebFetch(domain:vercel.com)",
       "WebFetch(domain:stripe.com)",
       "Bash(cat)",
-      "Bash(node /tmp/create_map_tables.mjs)"
+      "Bash(node /tmp/create_map_tables.mjs)",
+      "Bash(pnpm db:reset)",
+      "Bash(pnpm tsx *)"
     ],
     "additionalDirectories": [
       "c:\\Projects\\Personal\\MotoYaar\\public",

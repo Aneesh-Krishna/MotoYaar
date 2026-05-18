@@ -131,7 +131,7 @@ describe("ExpenseForm edit mode", () => {
     expect(screen.getByDisplayValue("750")).toBeInTheDocument();
     // Date pre-populated
     expect(screen.getByDisplayValue("2026-03-21")).toBeInTheDocument();
-    // reason=Service renders ServiceCenterPicker (search input) instead of whereText free-text
+    // reason=Service renders PlacePicker (Places-backed search input) instead of whereText free-text
     expect(screen.getByPlaceholderText("Search service center…")).toBeInTheDocument();
     // Submit button shows "Update Expense"
     expect(screen.getByRole("button", { name: "Update Expense" })).toBeInTheDocument();

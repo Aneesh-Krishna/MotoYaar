@@ -20,9 +20,9 @@ import {
 } from "@/services/api/expenseApi";
 import { ApiError } from "@/lib/api-client";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
-import { ServiceCenterPicker } from "@/components/expenses/ServiceCenterPicker";
+import { PlacePicker } from "@/components/maps/PlacePicker";
 import { RatingPrompt } from "@/components/service-centers/RatingPrompt";
-import type { Expense, ExpenseReason, ServiceCenter } from "@/types";
+import type { Expense, ExpenseReason, FuelStation, ServiceCenter } from "@/types";
 
 interface ExpenseFormProps {
   vehicleId?: string;
@@ -44,6 +44,7 @@ export function ExpenseForm({ vehicleId, vehicleName, expense, onSaved, onTripRe
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [selectedServiceCenter, setSelectedServiceCenter] = useState<ServiceCenter | null>(null);
+  const [selectedFuelStation, setSelectedFuelStation] = useState<FuelStation | null>(null);
   const [ratingPromptServiceCenter, setRatingPromptServiceCenter] = useState<ServiceCenter | null>(null);
   const isEditMode = !!expense;
 
@@ -159,7 +160,11 @@ export function ExpenseForm({ vehicleId, vehicleName, expense, onSaved, onTripRe
   const onSubmit = async (data: CreateExpenseInput) => {
     setIsSubmitting(true);
     try {
-      const payload = { ...data, serviceCenterId: selectedServiceCenter?.id };
+      const payload = {
+        ...data,
+        serviceCenterId: selectedServiceCenter?.id,
+        fuelStationId: selectedFuelStation?.id,
+      };
       if (isEditMode) {
         await updateExpense(expense.id, {
           ...payload,
@@ -351,13 +356,20 @@ export function ExpenseForm({ vehicleId, vehicleName, expense, onSaved, onTripRe
         </div>
       )}
 
-      {/* Where (optional) — service center picker when reason=Service, else free-text */}
+      {/* Where (optional) — Places-backed picker for Service/Fuel, free-text for Others */}
       <div>
         <label className={labelClass}>Where</label>
         {selectedReason === "Service" ? (
-          <ServiceCenterPicker
+          <PlacePicker
+            mode="service-center"
             value={selectedServiceCenter}
             onChange={setSelectedServiceCenter}
+          />
+        ) : selectedReason === "Fuel" ? (
+          <PlacePicker
+            mode="fuel-station"
+            value={selectedFuelStation}
+            onChange={setSelectedFuelStation}
           />
         ) : (
           <input

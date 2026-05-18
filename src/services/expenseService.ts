@@ -24,6 +24,7 @@ function mapExpense(row: typeof expenses.$inferSelect): Expense {
     odometerKm: row.odometerKm ?? undefined,
     kmpl: row.kmpl != null ? Number(row.kmpl) : undefined,
     serviceCenterId: row.serviceCenterId ?? undefined,
+    fuelStationId: row.fuelStationId ?? undefined,
     createdAt: row.createdAt.toISOString(),
   };
 }
@@ -88,6 +89,7 @@ export const expenseService = {
         odometerKm: data.odometerKm ?? null,
         kmpl: null,
         serviceCenterId: data.serviceCenterId ?? null,
+        fuelStationId: data.fuelStationId ?? null,
       })
       .returning();
 
@@ -221,6 +223,7 @@ export const expenseService = {
         ...(newReceiptKey !== undefined && { receiptKey: newReceiptKey }),
         ...(newReceiptUrl !== undefined && { receiptUrl: newReceiptUrl }),
         ...(data.serviceCenterId !== undefined && { serviceCenterId: data.serviceCenterId ?? null }),
+        ...(data.fuelStationId !== undefined && { fuelStationId: data.fuelStationId ?? null }),
       })
       .where(eq(expenses.id, expenseId))
       .returning();

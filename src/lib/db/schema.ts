@@ -158,11 +158,54 @@ export const serviceCenters = pgTable(
     createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
     avgRating: numeric("avg_rating", { precision: 3, scale: 2 }),
     reviewCount: integer("review_count").notNull().default(0),
+    googlePlaceId: text("google_place_id"),
+    lat: doublePrecision("lat"),
+    lng: doublePrecision("lng"),
+    formattedAddress: text("formatted_address"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
     cityIdx: index("idx_service_centers_city").on(table.city),
     nameSearchIdx: index("idx_service_centers_name").using("gin", sql`to_tsvector('english', ${table.name})`),
+    googlePlaceIdUnique: uniqueIndex("service_centers_google_place_id_unique")
+      .on(table.googlePlaceId)
+      .where(sql`${table.googlePlaceId} IS NOT NULL`),
+  })
+);
+
+// ─── Fuel Stations ───────────────────────────────────────────────────────────
+export const fuelStations = pgTable(
+  "fuel_stations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    googlePlaceId: text("google_place_id").notNull(),
+    name: text("name").notNull(),
+    formattedAddress: text("formatted_address"),
+    lat: doublePrecision("lat"),
+    lng: doublePrecision("lng"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    googlePlaceIdUnique: uniqueIndex("fuel_stations_google_place_id_unique").on(table.googlePlaceId),
+  })
+);
+
+// ─── API Rate Limits ─────────────────────────────────────────────────────────
+// Sliding-window counters per (userId, endpoint, windowKey). windowKey is a
+// time-bucket string like "min:2026-05-18T10:23" or "day:2026-05-18". The
+// special userId all-zeros is reserved for global counters.
+export const apiRateLimits = pgTable(
+  "api_rate_limits",
+  {
+    userId: uuid("user_id").notNull(),
+    endpoint: text("endpoint").notNull(),
+    windowKey: text("window_key").notNull(),
+    count: integer("count").notNull().default(0),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  },
+  (table) => ({
+    pk: uniqueIndex("api_rate_limits_pk").on(table.userId, table.endpoint, table.windowKey),
+    expiresAtIdx: index("idx_api_rate_limits_expires").on(table.expiresAt),
   })
 );
 
@@ -220,6 +263,7 @@ export const expenses = pgTable(
     odometerKm: integer("odometer_km"),
     kmpl: numeric("kmpl", { precision: 5, scale: 2 }),
     serviceCenterId: uuid("service_center_id").references(() => serviceCenters.id, { onDelete: "set null" }),
+    fuelStationId: uuid("fuel_station_id").references(() => fuelStations.id, { onDelete: "set null" }),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
     deletedByOwner: boolean("deleted_by_owner").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

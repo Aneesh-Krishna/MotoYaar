@@ -13,6 +13,10 @@ function mapServiceCenter(row: typeof serviceCenters.$inferSelect): ServiceCente
     createdBy: row.createdBy ?? undefined,
     avgRating: row.avgRating != null ? Number(row.avgRating) : undefined,
     reviewCount: row.reviewCount,
+    googlePlaceId: row.googlePlaceId ?? undefined,
+    lat: row.lat ?? undefined,
+    lng: row.lng ?? undefined,
+    formattedAddress: row.formattedAddress ?? undefined,
     createdAt: row.createdAt.toISOString(),
   };
 }

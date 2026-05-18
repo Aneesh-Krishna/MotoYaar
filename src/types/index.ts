@@ -81,6 +81,7 @@ export interface Expense {
   odometerKm?: number;
   kmpl?: number;
   serviceCenterId?: string;
+  fuelStationId?: string;
   createdAt: string;
 }
 
@@ -92,6 +93,20 @@ export interface ServiceCenter {
   createdBy?: string;
   avgRating?: number;
   reviewCount: number;
+  googlePlaceId?: string;
+  lat?: number;
+  lng?: number;
+  formattedAddress?: string;
+  createdAt: string;
+}
+
+export interface FuelStation {
+  id: string;
+  googlePlaceId: string;
+  name: string;
+  formattedAddress?: string;
+  lat?: number;
+  lng?: number;
   createdAt: string;
 }
 

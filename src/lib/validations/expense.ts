@@ -7,6 +7,7 @@ const baseExpenseFields = {
   whereText: z.string().optional(),
   comment: z.enum(["Overpriced", "Average", "Underpriced"]).optional(),
   serviceCenterId: z.string().uuid().optional(),
+  fuelStationId: z.string().uuid().optional(),
 };
 
 export const createExpenseSchema = z.object({
