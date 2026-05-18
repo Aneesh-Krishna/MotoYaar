@@ -183,6 +183,13 @@
       "when": 1747123200000,
       "tag": "0025_comment_votes",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1779041054546,
+      "tag": "0026_empty_kingpin",
+      "breakpoints": true
     }
   ]
 }

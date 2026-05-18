@@ -709,6 +709,46 @@ export const clubMembers = pgTable(
   })
 );
 
+// ─── Map Cache ────────────────────────────────────────────────────────────────
+export const mapCache = pgTable(
+  "map_cache",
+  {
+    cacheKey: text("cache_key").primaryKey(),
+    cacheType: text("cache_type").notNull(),
+    responseData: jsonb("response_data").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    hitCount: integer("hit_count").notNull().default(0),
+  },
+  (table) => ({
+    expiresAtIdx: index("idx_map_cache_expires").on(table.expiresAt),
+    cacheTypeCheck: check(
+      "map_cache_type_check",
+      sql`${table.cacheType} IN ('autocomplete', 'directions', 'geocode')`
+    ),
+  })
+);
+
+// ─── Saved Places ─────────────────────────────────────────────────────────────
+export const savedPlaces = pgTable(
+  "saved_places",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    address: text("address"),
+    lat: doublePrecision("lat").notNull(),
+    lng: doublePrecision("lng").notNull(),
+    placeId: text("place_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    userIdIdx: index("idx_saved_places_user_id").on(table.userId),
+  })
+);
+
 // ─── Relations ────────────────────────────────────────────────────────────────
 
 export const usersRelations = relations(users, ({ many }) => ({

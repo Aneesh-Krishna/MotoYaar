@@ -1,4 +1,4 @@
-import { Home, Car, Users, Map, User, type LucideIcon } from "lucide-react";
+import { Home, Car, Users, Map, User, Navigation, type LucideIcon } from "lucide-react";
 
 export interface NavTab {
   href: string;
@@ -7,11 +7,11 @@ export interface NavTab {
 }
 
 export const NAV_TABS: NavTab[] = [
-  { href: "/",          label: "Home",      Icon: Home  },
-  { href: "/garage",    label: "Garage",    Icon: Car   },
-  { href: "/community", label: "Community", Icon: Users },
-  { href: "/trips",     label: "Trips",     Icon: Map   },
-  { href: "/profile",   label: "Profile",   Icon: User  },
+  { href: "/",          label: "Home",      Icon: Home       },
+  { href: "/garage",    label: "Garage",    Icon: Car        },
+  { href: "/maps",      label: "Maps",      Icon: Navigation },
+  { href: "/community", label: "Community", Icon: Users      },
+  { href: "/profile",   label: "Profile",   Icon: User       },
 ];
 
 export interface FabEntry {
