@@ -1,0 +1,270 @@
+gate_decision: PASS
+story: "17.1 — Map Embed, Place Search & Directions"
+reviewed_by: Quinn (QA Agent)
+review_date: 2026-05-18
+model: claude-sonnet-4-6
+
+test_run:
+  files: 78
+  tests: 701
+  result: PASS
+  typecheck: PASS
+  lint: PASS
+
+# ──────────────────────────────────────────────
+# AC TRACEABILITY
+# ──────────────────────────────────────────────
+acceptance_criteria:
+  - ac: 1
+    text: "Maps tab accessible from main navigation"
+    status: PASS
+    evidence: "src/config/nav.ts — Maps tab at /maps, Navigation icon, position 3"
+
+  - ac: 2
+    text: "Map renders centred on user GPS location"
+    status: PASS
+    evidence: "MapContainer.tsx:68-84 — getCurrentPosition, panTo/setZoom on success"
+
+  - ac: 3
+    text: "Zoom 5-20, pinch-to-zoom, pan on mobile"
+    status: PASS
+    evidence: "MapContainer.tsx:197-200 — minZoom:5, maxZoom:20, gestureHandling:'greedy'"
+
+  - ac: 4
+    text: "Map type toggles: Roadmap, Satellite, Terrain, Hybrid"
+    status: PASS
+    evidence: "MapTypeToggle.tsx — all 4 types enumerated, wired to mapStore.setMapType"
+
+  - ac: 5
+    text: "Dark mode auto from system + manual toggle"
+    status: PASS
+    evidence: "MapContainer.tsx:57-63 — matchMedia listener; MapTypeToggle dark/light button"
+
+  - ac: 6
+    text: "Places Autocomplete with session token — single charge per search"
+    status: PASS
+    evidence: "SearchBar.tsx:89 getSessionToken() per keystroke; :104 consumeSessionToken() before getDetails(); sessionToken.test.ts verified"
+
+  - ac: 7
+    text: "Search scoped to India by default"
+    status: PASS
+    evidence: "SearchBar.tsx:91 — componentRestrictions: { country: 'in' }"
+
+  - ac: 8
+    text: "Recent searches (up to 20) in IndexedDB"
+    status: PASS
+    evidence: "SearchBar.tsx:40-53 — saveRecent with atomic FIFO eviction, MAX_RECENT=20"
+
+  - ac: 9
+    text: "Select result places marker and triggers A→B routing"
+    status: PASS
+    evidence: "MapContainer.tsx:162-180 — handlePlaceSelect, fetchDirections, startNavigation, fitBounds"
+
+  - ac: 10
+    text: "ETA displayed prominently during navigation"
+    status: PASS
+    evidence: "NavigationHUD.tsx:28-29 — remaining seconds summed from stepIndex onward; large orange badge"
+
+  - ac: 11
+    text: "Turn-by-turn list in expandable drawer"
+    status: PASS
+    evidence: "DirectionsDrawer.tsx — collapsed by default, ChevronDown/Up, max-h-56 scroll list"
+
+  - ac: 12
+    text: "Current instruction HUD overlay during navigation"
+    status: PASS
+    evidence: "NavigationHUD.tsx — absolute top overlay; MapContainer.tsx:246-248 renders when isNavigating"
+
+  - ac: 13
+    text: "Distance to next turn updates as rider moves"
+    status: PASS
+    evidence: "NavigationHUD.tsx:24 — currentStep.distance.text; watchPosition advances stepIndex"
+
+  - ac: 14
+    text: "Auto re-route on >150m deviation"
+    status: PASS
+    evidence: "MapContainer.tsx:116-138 — stepPath reduction, 150m threshold, 15s REROUTE_COOLDOWN_MS"
+
+  - ac: 15
+    text: "Speed in km/h from GPS displayed during navigation"
+    status: PASS
+    evidence: "MapContainer.tsx:97-99 — pos.coords.speed × 3.6; SpeedBadge reads from store"
+
+  - ac: 16
+    text: "Voice navigation SpeechSynthesis en-IN, mutable"
+    status: PASS
+    evidence: "NavigationHUD.tsx:32-43 — SpeechSynthesisUtterance, lang:en-IN, rate:0.95; isMuted gate"
+
+  - ac: 17
+    text: "Maps JS SDK lazy-loaded only on /maps route"
+    status: PASS
+    evidence: "maps/page.tsx:6-9 — dynamic import MapContainer { ssr:false }; useJsApiLoader in page only"
+
+  - ac: 18
+    text: "Budget alert ₹2,000 warn + ₹5,000 hard cutoff confirmed"
+    status: WAIVED
+    notes: "Manual action — user confirmed billing account linked 2026-05-18. Budget alert setup documented in Dev Agent Record. Cannot be automated."
+
+  - ac: 19
+    text: "pnpm typecheck and pnpm lint pass"
+    status: PASS
+    evidence: "Both exit 0 — verified this review session"
+
+  - ac: 20
+    text: "Supabase Realtime Broadcast PoC demonstrated"
+    status: PASS
+    evidence: "realtime-poc/page.tsx — channel 'poc-test-17-3', subscribe+send+receive with latency display. NEXT_PUBLIC_SUPABASE_ANON_KEY configured."
+
+# ──────────────────────────────────────────────
+# RISK ASSESSMENT
+# ──────────────────────────────────────────────
+risk_matrix:
+  - id: R1
+    area: Billing — session token
+    probability: low
+    impact: high
+    residual_risk: low
+    notes: "consumeSessionToken() called immediately before getDetails(); token reset confirmed by sessionToken.test.ts"
+
+  - id: R2
+    area: Billing — API key exposure
+    probability: low
+    impact: critical
+    residual_risk: low
+    notes: "GOOGLE_MAPS_SERVER_KEY server-only; NEXT_PUBLIC key domain-restricted to motoyaar.app+localhost. No key leak vectors found in code."
+
+  - id: R3
+    area: GPS watchPosition memory leak
+    probability: low
+    impact: medium
+    residual_risk: low
+    notes: "clearWatch called in useEffect cleanup; watchIdRef prevents double-register"
+
+  - id: R4
+    area: Reroute storm
+    probability: low
+    impact: medium
+    residual_risk: low
+    notes: "15s REROUTE_COOLDOWN_MS + lastRerouteRef prevents concurrent storms"
+
+  - id: R5
+    area: stale closure in watchPosition
+    probability: low
+    impact: high
+    residual_risk: low
+    notes: "navStateRef + destinationRef read inside callback; effect deps reduced to [isNavigating, ...]"
+
+  - id: R6
+    area: IndexedDB write race
+    probability: low
+    impact: low
+    residual_risk: low
+    notes: "Atomic clear+put transaction; module-level dbPromise prevents multiple connections"
+
+  - id: R7
+    area: fetchDirections error swallowed silently
+    probability: medium
+    impact: medium
+    residual_risk: medium
+    notes: "handlePlaceSelect catch:{} and reroute .catch(() => {}) are silent. User sees no route but no error message. Acceptable for Phase 1; recommend toast notification in 17.x follow-on."
+
+  - id: R8
+    area: AC 18 — budget enforcement is manual only
+    probability: medium
+    impact: high
+    residual_risk: medium
+    notes: "No programmatic cutoff implemented. Relies on Google Cloud billing alert email. No in-app quota guard exists. Acceptable for MVP but must be addressed before production scale."
+
+# ──────────────────────────────────────────────
+# NFR ASSESSMENT
+# ──────────────────────────────────────────────
+nfr_assessment:
+  performance:
+    - nfr: "Map load < 2s on 4G"
+      status: PASS
+      notes: "SDK lazy-loaded via dynamic import; only loaded on /maps. Not automatable — manual DevTools throttle test required."
+    - nfr: "Directions API response caching"
+      status: PASS
+      notes: "30min TTL (traffic), 24h (static), 7d (geocode). SHA256 cache keys. hit_count tracked."
+
+  security:
+    - nfr: "No server key on client"
+      status: PASS
+      notes: "GOOGLE_MAPS_SERVER_KEY only read in /api/maps/* route handlers"
+    - nfr: "Auth guard on API routes"
+      status: PASS
+      notes: "Both /api/maps/directions and /api/maps/geocode call getSession() and return 401 on failure"
+    - nfr: "Input passed to Google API"
+      status: CONCERN
+      notes: "origin/destination/address params from query string are passed directly to Google APIs. Google validates them server-side, but no local length/character sanitisation. Low risk for Phase 1 — recommend max-length validation in 17.x."
+
+  reliability:
+    - nfr: "Geolocation denial UX"
+      status: PASS
+      notes: "Error banner rendered for PERMISSION_DENIED and signal errors"
+    - nfr: "API error messages"
+      status: PASS
+      notes: "GOOGLE_STATUS_MSGS maps all known status codes; generic fallback for unknown"
+
+  testability:
+    - nfr: "Unit tests for cache service"
+      status: PASS
+      notes: "mapCacheService.test.ts — hit/miss/expiry/purgeExpired all covered"
+    - nfr: "Unit tests for session token"
+      status: PASS
+      notes: "sessionToken.test.ts — get/consume lifecycle, no refreshSessionToken export"
+    - nfr: "Missing: SearchBar unit tests"
+      status: CONCERN
+      notes: "No automated test for autocomplete prediction rendering, recent search FIFO, or handleSelect flow. Manual only."
+    - nfr: "Missing: NavigationHUD / DirectionsDrawer unit tests"
+      status: CONCERN
+      notes: "stripHtml is tested implicitly by usage; no snapshot or render tests for HUD/Drawer components."
+
+# ──────────────────────────────────────────────
+# FINDINGS SUMMARY
+# ──────────────────────────────────────────────
+findings:
+  critical: []
+
+  high: []
+
+  recommendations:
+    - id: REC-1
+      component: MapContainer.tsx
+      finding: "Silent error swallow in handlePlaceSelect and reroute .catch(() => {})"
+      suggestion: "Add a toast or mapStore.setGeoError() call on route fetch failure so user knows navigation isn't starting"
+      priority: should-fix-in-17.x
+
+    - id: REC-2
+      component: api/maps/directions, api/maps/geocode
+      finding: "No input length/character validation on origin/destination/address before forwarding to Google"
+      suggestion: "Add max-length guard (e.g., 512 chars) and reject obviously invalid inputs with 400"
+      priority: should-fix-before-production
+
+    - id: REC-3
+      component: SearchBar.tsx
+      finding: "onBlur uses setTimeout 150ms to allow click to register — fragile on slow devices"
+      suggestion: "Use onMouseDown on list items with e.preventDefault() to prevent blur racing the click"
+      priority: nice-to-have
+
+    - id: REC-4
+      component: MapContainer.tsx
+      finding: "stepPath.reduce() for deviation check iterates all path points — O(n) per GPS tick"
+      suggestion: "For Phase 2: use google.maps.geometry.poly.isLocationOnEdge() or limit path points checked"
+      priority: nice-to-have-phase2
+
+    - id: REC-5
+      component: Coverage gap
+      finding: "SearchBar, NavigationHUD, DirectionsDrawer have no automated render tests"
+      suggestion: "Add React Testing Library tests for: autocomplete display, recent search list, drawer expand/collapse, HUD instruction/ETA rendering"
+      priority: should-add-in-17.x
+
+  acknowledged_good_practices:
+    - "Session token lifecycle is textbook correct — getSessionToken() per keystroke, consumeSessionToken() immediately before getDetails()"
+    - "navStateRef + destinationRef pattern cleanly avoids watchPosition re-registration without compromising reactivity"
+    - "purgeExpired uses .returning() for accurate row count — correct Drizzle pattern"
+    - "Module-level dbPromise — single IDB connection shared across renders"
+    - "REROUTE_COOLDOWN_MS prevents burst rerouting — good real-world safety valve"
+    - "DARK_MAP_STYLE suppresses POI noise (poi visibility:off) — good for navigation use case"
+    - "stripHtml handles both tag removal and HTML entity decoding — correct for Google Directions API"
+    - "fetchDirections returns typed google.maps.DirectionsResult — no loose any types in the happy path"

@@ -26,7 +26,7 @@ describe("NAV_TABS config", () => {
 
   it("tabs are in the correct order", () => {
     const labels = NAV_TABS.map((t) => t.label);
-    expect(labels).toEqual(["Home", "Garage", "Community", "Trips", "Profile"]);
+    expect(labels).toEqual(["Home", "Garage", "Maps", "Community", "Profile"]);
   });
 
   it("Home tab href is /", () => {
